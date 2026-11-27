@@ -363,6 +363,20 @@ export class Shell {
     wc?.focus()
   }
 
+  /** Open the pinned chat and grab its avatar again (fixes letter-only pins, new pictures). */
+  async refreshPinAvatar(id: string): Promise<void> {
+    await this.openPin(id)
+    const pin = this.pins.items.find((p) => p.id === id)
+    const wc = pin ? this.slots.get(pin.service)?.view?.webContents : undefined
+    if (!pin || !wc) return
+    await new Promise((r) => setTimeout(r, 1200)) // let the chat header render
+    const avatar = await grabAvatar(wc)
+    if (avatar) {
+      pin.avatar = avatar
+      this.savePinsAndEmit()
+    }
+  }
+
   renamePin(id: string, name: string): void {
     const pin = this.pins.items.find((p) => p.id === id)
     const clean = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 64)
@@ -411,6 +425,7 @@ export class Shell {
     Menu.buildFromTemplate([
       { label: 'Open', click: () => void this.openPin(id) },
       { label: 'Rename…', click: () => this.startRename('pin', id) },
+      { label: 'Refresh avatar', click: () => void this.refreshPinAvatar(id) },
       {
         label: 'Move to',
         submenu: [

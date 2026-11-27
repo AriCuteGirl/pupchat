@@ -3,6 +3,8 @@
   import { onMount } from 'svelte'
   import type { ShellApi, ShellState } from '../../../shared/ipc'
   import type { Pin } from '../../../shared/pins'
+  import { SERVICES } from '../../../shared/services'
+  import { serviceIcon } from './icons'
 
   /** Pinned chats of the active platform, in colored collapsible categories (PinDMs-style). */
   let { shell, api, collapsed }: { shell: ShellState; api: ShellApi; collapsed: boolean } = $props()
@@ -18,6 +20,7 @@
   ])
   const currentUrlPinId = $derived(shell.current.pinnedId)
   const pinnable = $derived(shell.pinPlatforms.includes(service))
+  const logo = $derived(serviceIcon(SERVICES.find((x) => x.id === service)?.icon ?? ''))
 
   // Inline rename (started from the right-click menu).
   let renaming = $state<{ kind: 'pin' | 'category'; id: string } | null>(null)
@@ -107,8 +110,15 @@
                 api.pinMenu(p.id)
               }}
             >
-              <span class="av">
-                {#if p.avatar}<img src={p.avatar} alt="" />{:else}<span class="ini" style:background={g.color}>{initial(p)}</span>{/if}
+              <span class="av-wrap">
+                <span class="av">
+                  {#if p.avatar}<img src={p.avatar} alt="" />{:else}<span class="ini" style:background={g.color}>{initial(p)}</span>{/if}
+                </span>
+                {#if logo}
+                  <span class="badge" style:background="#{logo.hex}" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="9" height="9"><path d={logo.path} fill="#fff" /></svg>
+                  </span>
+                {/if}
               </span>
               {#if !collapsed}<span class="pname">{p.name}</span>{/if}
             </button>
@@ -188,6 +198,21 @@
   }
   .pin.on {
     background: var(--glass-selected);
+  }
+  .av-wrap {
+    position: relative;
+    flex: none;
+  }
+  .badge {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 0 2px rgba(30, 30, 36, 0.95);
   }
   .av {
     width: 32px;

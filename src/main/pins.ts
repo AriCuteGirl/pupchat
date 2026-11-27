@@ -57,15 +57,21 @@ export const FIND_TOP_CHAT_AVATAR = `(() => {
 /** Grab and shrink an avatar to a 64 px PNG data URL (with the platform's own cookies). */
 export async function grabAvatar(wc: WebContents, finder: string = FIND_HEADER_AVATAR): Promise<string> {
   try {
-    const src = (await wc.executeJavaScript(finder)) as unknown
-    if (typeof src !== 'string' || !/^https:\/\//.test(src) || src.length > 2000) return ''
-    const res = await wc.session.fetch(src)
+    const raw = (await wc.executeJavaScript(finder)) as unknown
+    if (typeof raw !== 'string' || !/^https:\/\//.test(raw) || raw.length > 2000) return ''
+    // Ask CDNs for a small version when they support a size parameter (Discord: ?size=64).
+    const url = new URL(raw)
+    if (url.searchParams.has('size')) url.searchParams.set('size', '64')
+    const res = await wc.session.fetch(url.toString())
     if (!res.ok) return ''
     const buf = Buffer.from(await res.arrayBuffer())
     if (buf.length > 3_000_000) return ''
     const img = nativeImage.createFromBuffer(buf)
-    if (img.isEmpty()) return ''
-    return img.resize({ width: 64, height: 64, quality: 'good' }).toDataURL()
+    if (!img.isEmpty()) return img.resize({ width: 64, height: 64, quality: 'good' }).toDataURL()
+    // The decoder can't read every format (Discord avatars are WebP): keep small images as they are.
+    const type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim()
+    if (/^image\/(webp|png|jpeg)$/.test(type) && buf.length < 55_000) return `data:${type};base64,${buf.toString('base64')}`
+    return ''
   } catch {
     return ''
   }
