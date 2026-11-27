@@ -54,7 +54,11 @@ export class OverlayPaw {
 
   start(initial: OverlayPawState): void {
     this.write(initial)
-    this.child = spawn('quickshell', ['--path', this.qmlDir, '--no-duplicate'], {
+    // A paw left over from a previous PupChat (still shutting down, or orphaned) would show
+    // as a second paw: end it first. Matches only PupChat's own paw (its QML folder).
+    spawnSync('pkill', ['-f', '^quickshell --path [^ ]*/quickshell/paw$'], { timeout: 3000 })
+    const startedAt = Date.now()
+    this.child = spawn('quickshell', ['--path', this.qmlDir], {
       env: { ...process.env, PUPCHAT_PAW_STATE: this.stateFile },
       stdio: ['ignore', 'ignore', 'pipe']
     })
@@ -64,6 +68,11 @@ export class OverlayPaw {
     })
     this.child.on('exit', (code) => {
       this.child = null
+      // Only a paw that ran and then crashed hands over to the built-in paw window.
+      if (Date.now() - startedAt < 1500) {
+        console.warn(`[pupchat] overlay paw exited right away (${code}); not falling back`)
+        return
+      }
       console.warn(`[pupchat] overlay paw exited (${code}); using the built-in paw`)
       this.onExit()
     })
@@ -83,5 +92,7 @@ export class OverlayPaw {
     this.child = null
     c?.removeAllListeners('exit')
     c?.kill('SIGTERM')
+    // Make sure it's gone before PupChat exits, so a restart doesn't find it.
+    if (c?.pid) spawnSync('sh', ['-c', `for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 ${c.pid} 2>/dev/null || exit 0; sleep 0.1; done; kill -9 ${c.pid}`], { timeout: 3000 })
   }
 }
