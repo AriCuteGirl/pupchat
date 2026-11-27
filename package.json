@@ -1,0 +1,30 @@
+{
+  "name": "pupchat",
+  "productName": "PupChat",
+  "version": "0.1.0",
+  "description": "A frosted-glass, iMessage-style chat overlay for gaming",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.web.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "7.3.2",
+    "@tsconfig/svelte": "5.0.9",
+    "@types/node": "24.19.4",
+    "electron": "45.5.0",
+    "electron-vite": "6.0.0",
+    "svelte": "5.59.2",
+    "svelte-check": "4.7.8",
+    "typescript": "6.0.3",
+    "vite": "8.4.0",
+    "vitest": "5.1.2"
+  },
+  "desktopName": "pupchat.desktop"
+}
