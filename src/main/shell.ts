@@ -310,22 +310,40 @@ export class Shell {
   }
 
   /** Pin the open chat; if it's already pinned, unpin it. */
+  /**
+   * Pin the open chat; if it's already pinned, unpin it. When the platform has categories,
+   * a small menu asks where the pin goes first.
+   */
   async pinCurrent(): Promise<void> {
     const slot = this.slots.get(this.active)
     const wc = slot?.view?.webContents
     if (!slot || !wc || !isChatUrl(slot.def.id, slot.url)) return
     const existing = this.pins.items.find((p) => p.service === slot.def.id && p.url === slot.url)
     if (existing) return this.unpin(existing.id)
+    const service = slot.def.id
     const url = slot.url
-    const avatar = await grabAvatar(wc)
-    addPin(this.pins, {
-      service: slot.def.id,
-      url,
-      name: nameFromTitle(slot.title, slot.def.name) || slot.def.name,
-      avatar,
-      category: ''
-    })
-    this.savePinsAndEmit()
+    const title = slot.title
+    const pinTo = async (category: string, renameCategoryAfter = false): Promise<void> => {
+      const avatar = await grabAvatar(wc)
+      addPin(this.pins, { service, url, name: nameFromTitle(title, slot.def.name) || slot.def.name, avatar, category })
+      this.savePinsAndEmit()
+      if (renameCategoryAfter && category) this.startRename('category', category)
+    }
+    const cats = this.pins.categories.filter((c) => c.service === service)
+    if (!cats.length) return pinTo('')
+    Menu.buildFromTemplate([
+      { label: 'Pin to', enabled: false },
+      ...cats.map((c) => ({ label: c.name, click: () => void pinTo(c.id) })),
+      { label: 'Pinned (no category)', click: () => void pinTo('') },
+      { type: 'separator' as const },
+      {
+        label: 'New category…',
+        click: () => {
+          const c = addCategory(this.pins, service)
+          void pinTo(c.id, true)
+        }
+      }
+    ]).popup({ window: this.win })
   }
 
   unpin(id: string): void {
