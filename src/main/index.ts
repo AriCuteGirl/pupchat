@@ -15,6 +15,7 @@ import { setLaunchAtLogin } from './autostart'
 import { BANNER_SIZE, BANNER_TITLE, Banners, safeIcon } from './banners'
 import { loadSettings, makeSaver } from './settings'
 import { Shell, SERVICE_IDS } from './shell'
+import { FIND_TOP_CHAT_AVATAR, grabAvatar } from './pins'
 import { PupTray } from './tray'
 import { activeWorkArea, glassWindowOptions, setGlobalHotkey } from './platform'
 
@@ -287,16 +288,19 @@ async function start(): Promise<void> {
   const FALLBACK_WAIT_MS = 3000
   shell.onUnreadGrowth((id, name, added) => {
     const at = Date.now()
-    setTimeout(() => {
+    setTimeout(async () => {
       if ((lastRealNotification.get(id) ?? 0) >= at - 500) return
       if (!bannerAllowed(id)) return
+      // Instagram: show who wrote via the newest chat's avatar (its page has no names when narrow).
+      const page = id === 'instagram' ? shell.pageOf(id) : null
+      const icon = page ? safeIcon(await grabAvatar(page, FIND_TOP_CHAT_AVATAR)) : ''
       banners.push({
         silent: Boolean(shell.current.services[id]?.muted),
         service: id,
         name,
         title: added === 1 ? 'New message' : `${added} new messages`,
         body: '',
-        icon: '',
+        icon,
         notifId: -1,
         pageId: -1
       })

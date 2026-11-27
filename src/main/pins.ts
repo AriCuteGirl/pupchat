@@ -39,10 +39,25 @@ const FIND_HEADER_AVATAR = `(() => {
   return i ? (i.currentSrc || i.src) : ''
 })()`
 
-/** Grab and shrink the avatar to a 64 px PNG data URL (with the platform's own cookies). */
-export async function grabAvatar(wc: WebContents): Promise<string> {
+/**
+ * Instagram in a narrow panel shows its chat list as a column of avatars only (no names in the
+ * page). Newest chat first, so the top avatar is the person who just wrote. Returns its picture
+ * address only, and only on Instagram's DM pages.
+ */
+export const FIND_TOP_CHAT_AVATAR = `(() => {
+  if (!location.pathname.startsWith('/direct/')) return ''
+  const imgs = [...document.querySelectorAll('img')].filter((i) => {
+    const r = i.getBoundingClientRect()
+    return r.width >= 40 && r.width <= 64 && Math.abs(r.width - r.height) < 4 && r.left < 120 && r.top > 40 && /^https:/.test(i.currentSrc || i.src)
+  })
+  imgs.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  return imgs[0] ? (imgs[0].currentSrc || imgs[0].src) : ''
+})()`
+
+/** Grab and shrink an avatar to a 64 px PNG data URL (with the platform's own cookies). */
+export async function grabAvatar(wc: WebContents, finder: string = FIND_HEADER_AVATAR): Promise<string> {
   try {
-    const src = (await wc.executeJavaScript(FIND_HEADER_AVATAR)) as unknown
+    const src = (await wc.executeJavaScript(finder)) as unknown
     if (typeof src !== 'string' || !/^https:\/\//.test(src) || src.length > 2000) return ''
     const res = await wc.session.fetch(src)
     if (!res.ok) return ''

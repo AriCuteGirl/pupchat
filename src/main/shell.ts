@@ -134,6 +134,11 @@ export class Shell {
     return this.active
   }
 
+  /** A platform's page, if it's loaded. */
+  pageOf(id: string): Electron.WebContents | null {
+    return this.slots.get(id)?.view?.webContents ?? null
+  }
+
   get isSettingsOpen(): boolean {
     return this.settingsOpen
   }
