@@ -5,10 +5,13 @@ import { SERVICES, type ServiceDef } from '../shared/services'
 import { LIMITS, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
+import { skinCss } from './skins'
 import { createServiceView } from './serviceView'
 import { servicesToSleep } from './sleep'
 
 interface Slot {
+  /** insertCSS key of the iMessage look, when applied to the current page. */
+  skinKey: string | null
   def: ServiceDef
   view: WebContentsView | null
   status: ServiceStatus
@@ -45,7 +48,8 @@ export class Shell {
         unread: 0,
         needsLogin: false,
         lastUsed: 0,
-        retryTimer: null
+        retryTimer: null,
+        skinKey: null
       })
     this.active = this.listed()[0]!.def.id
     win.on('resize', () => this.layout())
@@ -181,6 +185,7 @@ export class Shell {
       if (first) this.select(first.def.id)
     }
     this.applyAudio()
+    for (const s of this.slots.values()) void this.applySkin(s)
     this.layout()
     this.emit()
     for (const fn of this.settingsListeners) fn(this.settings, prev)
@@ -219,6 +224,21 @@ export class Shell {
     const quiet = this.settings.gameMode && !this.isPanelVisible()
     for (const s of this.slots.values())
       s.view?.webContents.setAudioMuted(Boolean(this.settings.services[s.def.id]?.muted) || quiet)
+  }
+
+  /** Add or remove the iMessage look on a platform's current page (CSS only). */
+  private async applySkin(slot: Slot): Promise<void> {
+    const wc = slot.view?.webContents
+    if (!wc || wc.isDestroyed()) return
+    const want = Boolean(this.settings.services[slot.def.id]?.skin)
+    const css = skinCss(slot.def.id)
+    if (want && css && !slot.skinKey) {
+      slot.skinKey = await wc.insertCSS(css, { cssOrigin: 'author' })
+    } else if (!want && slot.skinKey) {
+      const key = slot.skinKey
+      slot.skinKey = null
+      await wc.removeInsertedCSS(key).catch(() => {})
+    }
   }
 
   private syncVisibility(): void {
@@ -264,6 +284,11 @@ export class Shell {
     wc.on('did-start-loading', () => {
       if (slot.status !== 'ready') this.setStatus(slot, 'loading')
     })
+    // A new document loses inserted CSS: re-apply the look on every load.
+    wc.on('dom-ready', () => {
+      slot.skinKey = null
+      void this.applySkin(slot)
+    })
     wc.on('did-finish-load', () => {
       wc.setZoomFactor(this.zoomOf(id))
       this.setStatus(slot, 'ready')
@@ -299,6 +324,7 @@ export class Shell {
       void closePageGracefully(view.webContents)
     }
     slot.view = null
+    slot.skinKey = null
     slot.unread = 0
     slot.needsLogin = false
     slot.status = status

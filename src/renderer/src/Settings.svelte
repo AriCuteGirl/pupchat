@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, Bell, Bone, Mic, PawPrint, Power, VolumeX, X } from '@lucide/svelte'
+  import { ArrowDown, ArrowUp, Bell, Bone, MessageCircle, Mic, PawPrint, Power, VolumeX, X } from '@lucide/svelte'
   import type { ShellApi, ShellState } from '../../shared/ipc'
   import { SERVICES } from '../../shared/services'
   import { LIMITS, SLEEP_CHOICES, type ServicePrefs, type Settings } from '../../shared/settings'
@@ -175,12 +175,19 @@
             <PillToggle label="Mic and camera" on={p.media} onchange={(v) => setPref(id, { media: v })}>
               {#snippet icon()}<Mic size={13} />{/snippet}
             </PillToggle>
+            <PillToggle label={id === 'discord' ? 'iMessage colors' : 'iMessage look'} on={p.skin} onchange={(v) => setPref(id, { skin: v })}>
+              {#snippet icon()}<MessageCircle size={13} />{/snippet}
+            </PillToggle>
           </div>
         {/if}
       </div>
     {/each}
   </div>
   {#if enabledCount <= 1}<p class="note">At least one platform stays on.</p>{/if}
+  <p class="note">
+    iMessage look recolors the chat bubbles (blue for you, gray for them) using the site's own
+    theme colors. It's optional and may partly stop working when a site updates its design.
+  </p>
 
   <h3>Startup</h3>
   <div class="group">

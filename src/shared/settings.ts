@@ -9,6 +9,8 @@ export interface ServicePrefs {
   muted: boolean
   /** Allow microphone and camera (calls, voice messages). Off by default. */
   media: boolean
+  /** Optional iMessage look (CSS only). Off by default. */
+  skin: boolean
 }
 
 export interface Settings {
@@ -53,7 +55,8 @@ export const DEFAULT_SERVICE_PREFS: ServicePrefs = {
   enabled: true,
   notifications: true,
   muted: false,
-  media: false
+  media: false,
+  skin: false
 }
 
 export function defaults(ids: readonly string[]): Settings {
@@ -107,7 +110,8 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
       enabled: bool(r['enabled'], true),
       notifications: bool(r['notifications'], true),
       muted: bool(r['muted'], false),
-      media: bool(r['media'], false)
+      media: bool(r['media'], false),
+      skin: bool(r['skin'], false)
     }
   }
   // At least one platform stays enabled, or the panel would be empty.
