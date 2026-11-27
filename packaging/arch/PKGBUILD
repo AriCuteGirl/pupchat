@@ -1,0 +1,45 @@
+# Maintainer: AriCuteGirl
+pkgname=pupchat
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Liquid-glass, iMessage-style chat overlay for gaming (WhatsApp, Instagram, Discord, Messenger, Telegram)'
+arch=('x86_64')
+url='https://github.com/AriCuteGirl/pupchat'
+license=('MIT')
+depends=('gtk3' 'nss' 'alsa-lib' 'libxss' 'libxtst' 'libnotify')
+optdepends=('quickshell: paw stays visible over fullscreen games on Hyprland'
+            'hyprland: special-workspace hotkey and edge docking')
+makedepends=('git' 'nodejs' 'pnpm')
+source=("$pkgname::git+$url.git#tag=v$pkgver")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgname"
+  pnpm install --frozen-lockfile
+  pnpm exec electron-vite build
+  pnpm exec electron-builder --linux dir
+}
+
+package() {
+  cd "$pkgname"
+  install -d "$pkgdir/usr/lib/$pkgname"
+  cp -r dist/linux-unpacked/. "$pkgdir/usr/lib/$pkgname/"
+  install -d "$pkgdir/usr/bin"
+  ln -s "/usr/lib/$pkgname/pupchat" "$pkgdir/usr/bin/pupchat"
+  for s in 16 24 32 48 64 128 256 512; do
+    install -Dm644 "resources/icon/$s.png" "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/pupchat.png"
+  done
+  install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/pupchat.desktop" <<DESK
+[Desktop Entry]
+Type=Application
+Name=PupChat
+GenericName=Chat overlay
+Comment=WhatsApp, Instagram, Discord, Messenger and Telegram in one glass panel
+Exec=/usr/bin/pupchat %U
+Icon=pupchat
+Terminal=false
+StartupWMClass=pupchat
+Categories=Network;Chat;InstantMessaging;
+DESK
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

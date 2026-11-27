@@ -53,13 +53,21 @@ it again and you're back in the game, with focus right where it was.
 ## Install
 
 ### Arch / EndeavourOS
-Download the AppImage from [Releases](https://github.com/AriCuteGirl/pupchat/releases), or build it:
+Install for your user (no sudo; adds `pupchat`, a launcher entry and icons):
 
 ```bash
 git clone https://github.com/AriCuteGirl/pupchat && cd pupchat
+./scripts/install-local.sh          # update: run it again · remove: --uninstall
+```
+
+Or build a pacman package with `packaging/arch/PKGBUILD` (`makepkg -si`), or use the AppImage:
+
+```bash
 pnpm install
 pnpm dist:linux      # → dist/PupChat-<version>-x86_64.AppImage
 ```
+
+Turn on **Settings → Startup → Launch at login** to start PupChat (hidden) every time you log in.
 
 ### Windows 10 / 11
 Download `PupChat-Setup-<version>.exe` from [Releases](https://github.com/AriCuteGirl/pupchat/releases)

@@ -3,3 +3,8 @@ minimumReleaseAgeExclude:
 onlyBuiltDependencies:
   - electron
   - esbuild
+# Squirrel.Windows installer tooling (we build NSIS instead); its build script isn't needed.
+ignoredBuiltDependencies:
+  - electron-winstaller
+# Unapproved build scripts are skipped with a warning instead of failing the install.
+strictDepBuilds: false

@@ -8,9 +8,13 @@ function quote(arg: string): string {
   return `"${arg.replace(/[\\"`$]/g, (c) => `\\${c}`)}"`
 }
 
-/** The command that starts this PupChat, hidden. Packaged: the binary; dev: electron + app dir. */
+/**
+ * The command that starts this PupChat, hidden. AppImage: the .AppImage file (not the
+ * temporary mount it runs from); installed: the binary; dev: electron + app dir.
+ */
 export function launchCommand(): string {
-  const args = app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
+  const appImage = process.env['APPIMAGE']
+  const args = appImage ? [appImage] : app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
   return [...args.map(quote), '--hide'].join(' ')
 }
 

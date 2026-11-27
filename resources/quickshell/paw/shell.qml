@@ -3,6 +3,7 @@
 // games. PupChat starts this itself and writes the state file it reads; a click toggles the
 // panel through Hyprland directly. A layer surface never takes keyboard focus from the game.
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -54,30 +55,31 @@ ShellRoot {
             WlrLayershell.namespace: "pupchat-paw"
             WlrLayershell.layer: WlrLayer.Overlay
 
+            // No compositor blur behind a layer, so the glass is darker and more solid than the
+            // in-app paw, with a soft shadow and ring so it reads on bright and dark games.
             Rectangle {
                 id: pill
                 anchors.centerIn: parent
-                width: 48; height: 48; radius: 24
-                color: mouse.containsMouse ? "#5c2a2a32" : "#4a1e1e24"
-                border.width: 1
-                border.color: "#55ffffff"
+                width: 46; height: 46; radius: 23
+                color: mouse.containsMouse ? "#e62c2c34" : "#d91c1c22"
+                border.width: 1.5
+                border.color: mouse.containsMouse ? "#66ffffff" : "#40ffffff"
                 scale: mouse.pressed ? 0.94 : (mouse.containsMouse ? 1.06 : 1)
                 Behavior on scale { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                 Behavior on color { ColorAnimation { duration: 120 } }
-
-                // Top highlight, like the glass paw in the app.
-                Rectangle {
-                    anchors { top: parent.top; horizontalCenter: parent.horizontalCenter; topMargin: 1 }
-                    width: parent.width - 18; height: 1; radius: 1
-                    color: "#80ffffff"
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: "#99000000"
+                    shadowBlur: 0.6
+                    shadowVerticalOffset: 2
                 }
 
                 Image {
                     anchors.centerIn: parent
                     source: root.st.icon ? "file://" + root.st.icon : ""
-                    sourceSize.width: 22; sourceSize.height: 22
-                    width: 22; height: 22
-                    opacity: 0.95
+                    sourceSize.width: 24; sourceSize.height: 24
+                    width: 24; height: 24
                 }
             }
 
