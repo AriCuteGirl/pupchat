@@ -1,6 +1,6 @@
 <script lang="ts">
   import { PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw } from '@lucide/svelte'
-  import type { ServiceStatus, ShellApi, ShellState } from '../../shared/ipc'
+  import type { ServiceState, ShellApi, ShellState } from '../../shared/ipc'
   import { LAYOUT, sidebarWidth } from '../../shared/layout'
   import { serviceIcon } from './lib/icons'
   import SleepyPup from './lib/SleepyPup.svelte'
@@ -9,17 +9,33 @@
   const api = (window as unknown as { pupchat: ShellApi }).pupchat
   let shell = $state<ShellState | null>(null)
   void api.getState().then((s) => (shell = s))
-  api.onState((s) => (shell = s))
+  // Block body: returning the (proxied) value across the preload bridge would fail to clone.
+  api.onState((s) => {
+    shell = s
+  })
 
   const active = $derived(shell?.services.find((s) => s.id === shell?.active))
   const collapsed = $derived(shell?.collapsed ?? false)
 
-  const STATUS_TEXT: Record<ServiceStatus, string> = {
-    idle: 'Not opened yet',
-    loading: 'Loading…',
-    ready: 'Ready',
-    error: "Couldn't load"
+  function statusText(s: ServiceState): string {
+    switch (s.status) {
+      case 'idle':
+        return 'Not opened yet'
+      case 'loading':
+        return 'Loading…'
+      case 'asleep':
+        return 'Asleep (saving RAM)'
+      case 'offline':
+        return "You're offline"
+      case 'error':
+        return "Couldn't load"
+      case 'ready':
+        if (s.needsLogin) return 'Not logged in'
+        if (s.unread === 'dot') return 'New activity'
+        return s.unread > 0 ? `${s.unread} unread` : 'Up to date'
+    }
   }
+  const label = (u: number | 'dot'): string => (u === 'dot' ? '' : u > 99 ? '99+' : String(u))
   const iconFor = (id: string) => serviceIcon(SERVICES.find((s) => s.id === id)?.icon ?? '')
 </script>
 
@@ -52,7 +68,7 @@
             class="row"
             class:on={s.id === shell.active}
             aria-current={s.id === shell.active ? 'page' : undefined}
-            title={collapsed ? `${s.name} · ${STATUS_TEXT[s.status]}` : undefined}
+            title={collapsed ? `${s.name} · ${statusText(s)}` : undefined}
             onclick={() => api.select(s.id)}
           >
             <span class="marker" aria-hidden="true"><PawPrint size={12} /></span>
@@ -62,12 +78,22 @@
                   <path d={icon.path} fill="#fff" />
                 </svg>
               {/if}
+              {#if collapsed && s.unread !== 0}
+                {#key s.unread}<span class="badge wag" class:dot={s.unread === 'dot'}>{label(s.unread)}</span>{/key}
+              {/if}
             </span>
             {#if !collapsed}
               <span class="text">
                 <span class="name">{s.name}</span>
-                <span class="status" class:err={s.status === 'error'}>{STATUS_TEXT[s.status]}</span>
+                <span
+                  class="status"
+                  class:err={s.status === 'error' || s.status === 'offline'}
+                  class:warn={s.needsLogin}>{statusText(s)}</span
+                >
               </span>
+              {#if s.unread !== 0}
+                {#key s.unread}<span class="count wag" class:dot={s.unread === 'dot'}>{label(s.unread)}</span>{/key}
+              {/if}
             {/if}
           </button>
         {/each}
@@ -77,6 +103,7 @@
     <section class="main">
       <header class="header">
         <span class="headline">{active?.name ?? ''}</span>
+        {#if active?.needsLogin}<span class="hint">Log in below to start chatting</span>{/if}
       </header>
       <div class="stage">
         {#if active?.status === 'loading' || active?.status === 'idle'}
@@ -86,6 +113,12 @@
               <span style:width="62%"></span><span style:width="44%"></span><span style:width="70%"></span>
             </div>
             <p>Waking up {active.name}…</p>
+          </div>
+        {:else if active?.status === 'offline'}
+          <div class="state" role="alert">
+            <p class="err-title">You're offline</p>
+            <p>PupChat tries again by itself every 15 seconds.</p>
+            <button class="retry" onclick={() => api.retry(active.id)}><RotateCw size={15} /> Try now</button>
           </div>
         {:else if active?.status === 'error'}
           <div class="state" role="alert">
@@ -217,6 +250,72 @@
   .status.err {
     color: var(--c-danger);
   }
+  .status.warn {
+    color: var(--c-collar);
+  }
+  .logo {
+    position: relative;
+  }
+  .count,
+  .badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    box-sizing: border-box;
+    border-radius: var(--r-pill);
+    background: var(--c-accent);
+    color: #fff;
+    font-size: var(--fs-caption);
+    font-weight: var(--fw-medium);
+    font-variant-numeric: tabular-nums;
+    display: grid;
+    place-items: center;
+  }
+  .count {
+    margin-left: auto;
+  }
+  .badge {
+    position: absolute;
+    top: -5px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    font-size: 11px;
+    background: var(--c-danger);
+    box-shadow: 0 0 0 2px rgba(30, 30, 36, 0.9);
+  }
+  .count.dot,
+  .badge.dot {
+    min-width: 10px;
+    width: 10px;
+    height: 10px;
+    padding: 0;
+  }
+  .badge.dot {
+    top: -1px;
+    right: -1px;
+  }
+  /* Tail-wag: a little wiggle when the count changes. */
+  .wag {
+    animation: wag 520ms var(--ease-out);
+    transform-origin: 50% 90%;
+  }
+  @keyframes wag {
+    20% {
+      transform: rotate(-14deg) scale(1.12);
+    }
+    45% {
+      transform: rotate(11deg);
+    }
+    70% {
+      transform: rotate(-5deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wag {
+      animation: none;
+    }
+  }
 
   /* Main */
   .main {
@@ -228,8 +327,15 @@
   .header {
     height: var(--header-h);
     flex: none;
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+  }
+  .hint {
+    font-size: var(--fs-caption);
+    color: var(--c-collar);
   }
   .headline {
     font-size: var(--fs-headline);

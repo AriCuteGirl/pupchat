@@ -1,6 +1,8 @@
 import { app, BrowserWindow, screen, type WebContents } from 'electron'
 import { join } from 'node:path'
+import { CH } from '../shared/ipc'
 import { panelWidth } from '../shared/layout'
+import { totalUnread } from './badge'
 import { isCliCommand, parseCli, type CliCommand } from './cli'
 import { isHyprland, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
@@ -44,6 +46,10 @@ async function start(): Promise<void> {
   win.on('page-title-updated', (e) => e.preventDefault())
   win.webContents.on('will-navigate', (e) => e.preventDefault())
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // Our own UI's errors go to the terminal (service pages' consoles are not logged).
+  win.webContents.on('console-message', (e) => {
+    if (e.level === 'error' || e.level === 'warning') console.warn(`[shell ${e.level}] ${e.message}`)
+  })
 
   // Keys handled before the page sees them, in the shell and in every service view.
   // Esc hides the panel only from PupChat's own UI: inside a site it belongs to the site
@@ -59,6 +65,10 @@ async function start(): Promise<void> {
       } else if (input.control && input.shift && !input.alt && input.key.toLowerCase() === 'b') {
         e.preventDefault()
         shell?.setCollapsed(!shell.isCollapsed)
+      } else if (input.control && !input.shift && !input.alt && /^Digit[1-9]$/.test(input.code)) {
+        // Ctrl+1..9 by key position, so it also works on the CZ layout (+ěščř…).
+        e.preventDefault()
+        shell?.selectIndex(Number(input.code.slice(5)) - 1)
       }
     })
   }
@@ -86,6 +96,7 @@ async function start(): Promise<void> {
   }
   const p = new Panel(win, mode)
   panel = p
+  shell.isPanelVisible = () => p.isVisible
 
   // Flush to the right edge, full height; width follows the collapsed state.
   const place = (): void => {
@@ -126,7 +137,25 @@ async function start(): Promise<void> {
     }
   }
   p.onChange(placeTheWholeEdge)
-  shell.onState(placeTheWholeEdge)
+  let lastPawWidth = -1
+  shell.onState((st) => {
+    const w = panelWidth(st.collapsed)
+    if (w !== lastPawWidth) {
+      lastPawWidth = w
+      placeTheWholeEdge()
+    }
+    sendPawUnread(totalUnread(st.services.map((x) => x.unread)))
+  })
+  let lastTotal = -1
+  const sendPawUnread = (n: number): void => {
+    if (n === lastTotal || paw.isDestroyed()) return
+    lastTotal = n
+    paw.webContents.send(CH.pawUnread, n)
+  }
+  paw.webContents.on('did-finish-load', () => {
+    lastTotal = -1
+    sendPawUnread(totalUnread(shell.state().services.map((x) => x.unread)))
+  })
   paw.once('show', placeTheWholeEdge)
 
   const run = (cmd: CliCommand): void => {

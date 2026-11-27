@@ -7,8 +7,11 @@ export interface ServiceDef {
   hosts: string[]
   /** simple-icons export name for the logo (used unmodified). */
   icon: string
+  /** URL path prefixes that mean "you're on the login page" (no page content is read). */
+  loginPaths?: string[]
 }
 
+/** Default order. Which ones are enabled, and their order, becomes a setting in step 5. */
 export const SERVICES: readonly ServiceDef[] = [
   {
     id: 'whatsapp',
@@ -16,6 +19,38 @@ export const SERVICES: readonly ServiceDef[] = [
     url: 'https://web.whatsapp.com',
     hosts: ['web.whatsapp.com', '.whatsapp.com', '.whatsapp.net'],
     icon: 'siWhatsapp'
+  },
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    url: 'https://www.instagram.com/direct/inbox/',
+    hosts: ['.instagram.com'],
+    icon: 'siInstagram',
+    loginPaths: ['/accounts/login', '/accounts/emailsignup']
+  },
+  {
+    id: 'discord',
+    name: 'Discord',
+    url: 'https://discord.com/app',
+    hosts: ['discord.com', '.discord.com', 'discordapp.com', '.discordapp.com'],
+    icon: 'siDiscord',
+    loginPaths: ['/login', '/register']
+  },
+  {
+    id: 'messenger',
+    name: 'Messenger',
+    url: 'https://www.messenger.com',
+    // Messenger signs in through Facebook.
+    hosts: ['.messenger.com', '.facebook.com'],
+    icon: 'siMessenger',
+    loginPaths: ['/login']
+  },
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    url: 'https://web.telegram.org/a/',
+    hosts: ['web.telegram.org', '.telegram.org'],
+    icon: 'siTelegram'
   }
 ]
 
