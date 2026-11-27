@@ -33,6 +33,8 @@ export interface ShellState {
   pins: Pins
   /** The open chat on the active platform: can it be pinned, is it pinned? */
   current: { pinnable: boolean; pinnedId: string | null }
+  /** Platforms whose chats can be pinned. */
+  pinPlatforms: string[]
   /** The imported Discord theme, if any. */
   discordTheme: { source: string; importedAt: string; bytes: number } | null
 }
@@ -62,6 +64,7 @@ export const CH = {
   toggleCategory: 'pupchat:toggle-category',
   pinMenu: 'pupchat:pin-menu',
   categoryMenu: 'pupchat:category-menu',
+  addCategory: 'pupchat:add-category',
   startRename: 'pupchat:start-rename',
   previewSound: 'pupchat:preview-sound',
   pawUnread: 'pupchat:paw-unread'
@@ -97,6 +100,8 @@ export interface ShellApi {
   /** Right-click menus (native). */
   pinMenu(id: string): void
   categoryMenu(id: string): void
+  /** New empty category for a platform (then renamed inline). */
+  addCategory(service: string): void
   /** Main asks the UI to start inline renaming (after "Rename…" in a menu). */
   onStartRename(fn: (r: { kind: 'pin' | 'category'; id: string }) => void): void
 }

@@ -111,8 +111,16 @@ export class Banners {
       return
     }
     void this.send(true).then(() => {
+      // Wayland apps can't position themselves; the compositor moves the window, and only
+      // once it's mapped. So: show, then place, and place again shortly after in case the
+      // window mapped late (otherwise it lands wherever the compositor puts new windows).
+      const wasVisible = this.win.isVisible()
+      if (!wasVisible) this.win.showInactive()
       this.deps.place()
-      if (!this.win.isVisible()) this.win.showInactive()
+      if (!wasVisible) {
+        setTimeout(() => this.deps.place(), 60)
+        setTimeout(() => this.deps.place(), 250)
+      }
       this.arm(SHOW_MS)
     })
   }

@@ -182,6 +182,7 @@ export class Shell {
       hotkeyProblem: this.hotkeyProblem,
       pins: this.pins,
       current: this.currentChat(),
+      pinPlatforms: SERVICES.filter((x) => x.chatUrl).map((x) => x.id),
       discordTheme: themeInfo()
     }
   }
@@ -688,6 +689,9 @@ export class Shell {
     ipcMain.on(CH.toggleCategory, (e, id: unknown) => fromShell(e) && str(id) && this.toggleCategory(id))
     ipcMain.on(CH.pinMenu, (e, id: unknown) => fromShell(e) && str(id) && this.pinMenu(id))
     ipcMain.on(CH.categoryMenu, (e, id: unknown) => fromShell(e) && str(id) && this.categoryMenu(id))
+    ipcMain.on(CH.addCategory, (e, service: unknown) => {
+      if (fromShell(e) && str(service) && SERVICES.some((x) => x.id === service && x.chatUrl)) this.newCategoryFor(service)
+    })
     ipcMain.handle(CH.importDiscordTheme, (e) =>
       fromShell(e) ? this.importDiscordTheme() : { ok: false, error: 'not allowed' }
     )

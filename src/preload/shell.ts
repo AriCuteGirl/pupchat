@@ -28,6 +28,7 @@ const api: ShellApi = {
   toggleCategory: (id) => ipcRenderer.send(CH.toggleCategory, id),
   pinMenu: (id) => ipcRenderer.send(CH.pinMenu, id),
   categoryMenu: (id) => ipcRenderer.send(CH.categoryMenu, id),
+  addCategory: (service) => ipcRenderer.send(CH.addCategory, service),
   onStartRename: (fn) => {
     ipcRenderer.on(CH.startRename, (_e: IpcRendererEvent, r: { kind: 'pin' | 'category'; id: string }) => fn(r))
   }

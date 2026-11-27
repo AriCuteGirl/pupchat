@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronDown } from '@lucide/svelte'
+  import { ChevronDown, Plus } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import type { ShellApi, ShellState } from '../../../shared/ipc'
   import type { Pin } from '../../../shared/pins'
@@ -17,6 +17,7 @@
     ...cats.map((c) => ({ ...c, pins: items.filter((p) => p.category === c.id) }))
   ])
   const currentUrlPinId = $derived(shell.current.pinnedId)
+  const pinnable = $derived(shell.pinPlatforms.includes(service))
 
   // Inline rename (started from the right-click menu).
   let renaming = $state<{ kind: 'pin' | 'category'; id: string } | null>(null)
@@ -46,8 +47,11 @@
   const initial = (p: Pin): string => (p.name.replace(/^[#@]/, '') || '?').slice(0, 1).toUpperCase()
 </script>
 
-{#if groups.length}
+{#if pinnable}
   <div class="pins" class:collapsed aria-label="Pinned chats">
+    {#if !groups.length && !collapsed}
+      <p class="hint">Open a chat and press 📌 to pin it here.</p>
+    {/if}
     {#each groups as g (g.id)}
       {#if !collapsed}
         <div class="cat" style:--cat={g.color}>
@@ -112,6 +116,11 @@
         {/each}
       {/if}
     {/each}
+    {#if !collapsed}
+      <button class="add-cat" onclick={() => api.addCategory(service)}>
+        <Plus size={13} /> New category
+      </button>
+    {/if}
   </div>
 {/if}
 
@@ -228,6 +237,27 @@
     font-size: 12px;
     font-weight: var(--fw-bold);
     text-transform: uppercase;
+  }
+  .hint {
+    margin: var(--sp-2) var(--sp-2) 0;
+    font-size: var(--fs-caption);
+    color: var(--c-text-3);
+    line-height: 1.4;
+  }
+  .add-cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: var(--sp-2) var(--sp-2) 0;
+    padding: 3px 8px;
+    align-self: flex-start;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-caption);
+    color: var(--c-text-3);
+  }
+  .add-cat:hover {
+    background: var(--glass-hover);
+    color: var(--c-text-2);
   }
   .rail-sep {
     width: 22px;

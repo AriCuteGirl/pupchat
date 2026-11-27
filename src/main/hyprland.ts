@@ -50,6 +50,8 @@ export function focusPanel(title: string): Promise<string> {
 
 interface Monitor {
   id: number
+  name?: string
+  activeWorkspace?: { id: number; name: string }
   x: number
   y: number
   width: number
@@ -68,6 +70,8 @@ export interface EdgeGeometry {
   right: number
   side: Side
   pawY: number
+  /** That monitor's normal (non-special) workspace. */
+  workspace: string
 }
 
 const PAW = 56
@@ -101,7 +105,8 @@ async function edgeGeometry(
     left,
     right,
     side,
-    pawY: Math.round(m.y + top + height * 0.45)
+    pawY: Math.round(m.y + top + height * 0.45),
+    workspace: m.activeWorkspace?.name ?? ''
   }
 }
 
@@ -138,6 +143,15 @@ export async function placeBanner(
 ): Promise<void> {
   const g = await edgeGeometry(size.width, homeMonitor, side)
   if (!g) return
+  // A banner that appears while the panel is open would land inside the panel's special
+  // workspace (and vanish with it). Keep it on the monitor's normal workspace, where your
+  // game is; being pinned, it then shows on every workspace of that monitor.
+  if (g.workspace) {
+    await hyprctl([
+      'dispatch',
+      `hl.dsp.window.move({ workspace = "${g.workspace}", follow = false, window = "${sel(title)}" })`
+    ]).catch(() => '')
+  }
   const x = Math.round((g.left + g.right - size.width) / 2)
   const y = g.panel.y + 10
   await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = false, window = "${sel(title)}" })`])
