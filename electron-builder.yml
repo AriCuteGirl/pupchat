@@ -1,0 +1,51 @@
+appId: world.puppygirl.PupChat
+productName: PupChat
+executableName: pupchat
+copyright: Copyright © 2026 AriCuteGirl
+directories:
+  output: dist
+  buildResources: resources/icon
+files:
+  - out/**
+  - resources/fonts/**
+  - resources/tray/**
+  - package.json
+  - "!**/*.map"
+asar: true
+
+linux:
+  target:
+    - AppImage
+    - dir
+  icon: resources/icon/icon.png
+  category: Network
+  synopsis: Frosted-glass chat overlay for gaming
+  description: >-
+    PupChat docks WhatsApp, Instagram, Discord, Messenger and Telegram in one
+    iMessage-style liquid-glass panel you open with a hotkey while gaming.
+  executableArgs:
+    - --hide
+  desktop:
+    entry:
+      Name: PupChat
+      Comment: Chat overlay for gaming
+      StartupWMClass: pupchat
+      Keywords: chat;messages;overlay;whatsapp;discord;telegram;instagram;messenger;
+
+appImage:
+  artifactName: PupChat-${version}-${arch}.AppImage
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: resources/icon/pupchat.ico
+
+nsis:
+  artifactName: PupChat-Setup-${version}.exe
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: PupChat
