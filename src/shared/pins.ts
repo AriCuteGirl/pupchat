@@ -1,8 +1,10 @@
-/** Pinned chats, grouped in colored categories per platform (like Equicord's PinDMs, but in PupChat). */
+/**
+ * Pinned chats from all platforms in one list, grouped in colored categories (like Equicord's
+ * PinDMs, but in PupChat). Categories are global: a category can hold chats from any platform.
+ */
 
 export interface PinCategory {
   id: string
-  service: string
   name: string
   /** #rrggbb */
   color: string
@@ -58,13 +60,11 @@ export function validatePins(raw: unknown, isChatUrl: (service: string, url: str
   const categories: PinCategory[] = []
   const seen = new Set<string>()
   for (const c of Array.isArray(o['categories']) ? o['categories'] : []) {
+    // (Older files had a per-platform `service` on categories; it's simply ignored now.)
     if (!isObj(c) || typeof c['id'] !== 'string' || !ID.test(c['id']) || seen.has(c['id'])) continue
-    const service = text(c['service'], 32)
-    if (!service) continue
     seen.add(c['id'])
     categories.push({
       id: c['id'],
-      service,
       name: text(c['name'], 40) || 'Pinned',
       color: typeof c['color'] === 'string' && HEX.test(c['color']) ? c['color'].toLowerCase() : CATEGORY_COLORS[0].color,
       collapsed: c['collapsed'] === true
@@ -87,7 +87,7 @@ export function validatePins(raw: unknown, isChatUrl: (service: string, url: str
       url,
       name: text(p['name'], 64) || 'Chat',
       avatar: typeof p['avatar'] === 'string' && p['avatar'].length < 80_000 && AVATAR.test(p['avatar']) ? p['avatar'] : '',
-      category: categories.some((c) => c.id === cat && c.service === service) ? cat : ''
+      category: categories.some((c) => c.id === cat) ? cat : ''
     })
     if (items.length >= 300) break
   }
@@ -106,7 +106,7 @@ export function nameFromTitle(title: string, platform: string): string {
 }
 
 
-/** Move an item inside its own group (same service and category) by -1 / +1. */
+/** Move an item inside its own group by -1 / +1 (skipping items of other groups). */
 export function moveWithin<T extends { id: string }>(list: T[], id: string, delta: -1 | 1, sameGroup: (a: T, b: T) => boolean): void {
   const i = list.findIndex((x) => x.id === id)
   if (i < 0) return

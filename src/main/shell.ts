@@ -329,7 +329,7 @@ export class Shell {
       this.savePinsAndEmit()
       if (renameCategoryAfter && category) this.startRename('category', category)
     }
-    const cats = this.pins.categories.filter((c) => c.service === service)
+    const cats = this.pins.categories
     if (!cats.length) return pinTo('')
     Menu.buildFromTemplate([
       { label: 'Pin to', enabled: false },
@@ -339,7 +339,7 @@ export class Shell {
       {
         label: 'New category…',
         click: () => {
-          const c = addCategory(this.pins, service)
+          const c = addCategory(this.pins)
           void pinTo(c.id, true)
         }
       }
@@ -407,8 +407,8 @@ export class Shell {
     this.win.webContents.send(CH.startRename, { kind, id })
   }
 
-  private newCategoryFor(service: string, pinId?: string): void {
-    const c = addCategory(this.pins, service)
+  private newCategory(pinId?: string): void {
+    const c = addCategory(this.pins)
     const pin = pinId ? this.pins.items.find((p) => p.id === pinId) : undefined
     if (pin) pin.category = c.id
     this.savePinsAndEmit()
@@ -419,9 +419,8 @@ export class Shell {
   pinMenu(id: string): void {
     const pin = this.pins.items.find((p) => p.id === id)
     if (!pin) return
-    const cats = this.pins.categories.filter((c) => c.service === pin.service)
-    const sameGroup = (a: { service: string; category: string }, b: { service: string; category: string }): boolean =>
-      a.service === b.service && a.category === b.category
+    const cats = this.pins.categories
+    const sameGroup = (a: { category: string }, b: { category: string }): boolean => a.category === b.category
     Menu.buildFromTemplate([
       { label: 'Open', click: () => void this.openPin(id) },
       { label: 'Rename…', click: () => this.startRename('pin', id) },
@@ -437,7 +436,7 @@ export class Shell {
             click: () => ((pin.category = c.id), this.savePinsAndEmit())
           })),
           { type: 'separator' as const },
-          { label: 'New category…', click: () => this.newCategoryFor(pin.service, id) }
+          { label: 'New category…', click: () => this.newCategory(id) }
         ]
       },
       { label: 'Move up', click: () => (moveWithin(this.pins.items, id, -1, sameGroup), this.savePinsAndEmit()) },
@@ -451,7 +450,7 @@ export class Shell {
   categoryMenu(id: string): void {
     const c = this.pins.categories.find((x) => x.id === id)
     if (!c) return
-    const sameService = (a: { service: string }, b: { service: string }): boolean => a.service === b.service
+    const all = (): boolean => true
     Menu.buildFromTemplate([
       { label: 'Rename…', click: () => this.startRename('category', id) },
       {
@@ -464,10 +463,10 @@ export class Shell {
         }))
       },
       { label: c.collapsed ? 'Expand' : 'Collapse', click: () => this.toggleCategory(id) },
-      { label: 'Move up', click: () => (moveWithin(this.pins.categories, id, -1, sameService), this.savePinsAndEmit()) },
-      { label: 'Move down', click: () => (moveWithin(this.pins.categories, id, 1, sameService), this.savePinsAndEmit()) },
+      { label: 'Move up', click: () => (moveWithin(this.pins.categories, id, -1, all), this.savePinsAndEmit()) },
+      { label: 'Move down', click: () => (moveWithin(this.pins.categories, id, 1, all), this.savePinsAndEmit()) },
       { type: 'separator' },
-      { label: 'New category…', click: () => this.newCategoryFor(c.service) },
+      { label: 'New category…', click: () => this.newCategory() },
       {
         label: 'Delete category',
         click: () => {
@@ -723,7 +722,7 @@ export class Shell {
     ipcMain.on(CH.pinMenu, (e, id: unknown) => fromShell(e) && str(id) && this.pinMenu(id))
     ipcMain.on(CH.categoryMenu, (e, id: unknown) => fromShell(e) && str(id) && this.categoryMenu(id))
     ipcMain.on(CH.addCategory, (e, service: unknown) => {
-      if (fromShell(e) && str(service) && SERVICES.some((x) => x.id === service && x.chatUrl)) this.newCategoryFor(service)
+      if (fromShell(e) && str(service)) this.newCategory()
     })
     ipcMain.handle(CH.importDiscordTheme, (e) =>
       fromShell(e) ? this.importDiscordTheme() : { ok: false, error: 'not allowed' }

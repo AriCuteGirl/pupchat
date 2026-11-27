@@ -105,10 +105,10 @@ export async function goToChat(wc: WebContents, url: string): Promise<void> {
   if (!ok || !arrived) await wc.loadURL(url).catch(() => {})
 }
 
-export function addCategory(p: Pins, service: string, name = 'New category'): PinCategory {
-  const used = new Set(p.categories.filter((c) => c.service === service).map((c) => c.color))
+export function addCategory(p: Pins, name = 'New category'): PinCategory {
+  const used = new Set(p.categories.map((c) => c.color))
   const color = CATEGORY_COLORS.find((c) => !used.has(c.color))?.color ?? CATEGORY_COLORS[0].color
-  const c: PinCategory = { id: newId(), service, name, color, collapsed: false }
+  const c: PinCategory = { id: newId(), name, color, collapsed: false }
   p.categories.push(c)
   return c
 }

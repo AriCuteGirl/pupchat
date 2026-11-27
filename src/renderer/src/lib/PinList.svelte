@@ -6,12 +6,15 @@
   import { SERVICES } from '../../../shared/services'
   import { serviceIcon } from './icons'
 
-  /** Pinned chats of the active platform, in colored collapsible categories (PinDMs-style). */
+  /**
+   * Pinned chats from all platforms, in colored collapsible categories (PinDMs-style). Always
+   * shown, whatever platform is open; a click switches to the pin's platform and chat.
+   */
   let { shell, api, collapsed }: { shell: ShellState; api: ShellApi; collapsed: boolean } = $props()
 
   const service = $derived(shell.active)
-  const cats = $derived(shell.pins.categories.filter((c) => c.service === service))
-  const items = $derived(shell.pins.items.filter((p) => p.service === service))
+  const cats = $derived(shell.pins.categories)
+  const items = $derived(shell.pins.items)
   const groups = $derived([
     ...(items.some((p) => p.category === '')
       ? [{ id: '', name: 'Pinned', color: '#cad3f5', collapsed: false, pins: items.filter((p) => p.category === '') }]
@@ -20,7 +23,8 @@
   ])
   const currentUrlPinId = $derived(shell.current.pinnedId)
   const pinnable = $derived(shell.pinPlatforms.includes(service))
-  const logo = $derived(serviceIcon(SERVICES.find((x) => x.id === service)?.icon ?? ''))
+  const logoOf = (id: string) => serviceIcon(SERVICES.find((x) => x.id === id)?.icon ?? '')
+  const show = $derived(items.length > 0 || cats.length > 0 || pinnable)
 
   // Inline rename (started from the right-click menu).
   let renaming = $state<{ kind: 'pin' | 'category'; id: string } | null>(null)
@@ -50,10 +54,10 @@
   const initial = (p: Pin): string => (p.name.replace(/^[#@]/, '') || '?').slice(0, 1).toUpperCase()
 </script>
 
-{#if pinnable}
+{#if show}
   <div class="pins" class:collapsed aria-label="Pinned chats">
-    {#if !groups.length && !collapsed}
-      <p class="hint">Open a chat and press 📌 to pin it here.</p>
+    {#if !items.length && !collapsed}
+      <p class="hint">Open a chat on any platform and press 📌 to pin it here.</p>
     {/if}
     {#each groups as g (g.id)}
       {#if !collapsed}
@@ -103,7 +107,7 @@
             <button
               class="pin"
               class:on={p.id === currentUrlPinId}
-              title={collapsed ? p.name : undefined}
+              title={collapsed ? `${p.name} · ${SERVICES.find((x) => x.id === p.service)?.name ?? ''}` : undefined}
               onclick={() => api.openPin(p.id)}
               oncontextmenu={(e) => {
                 e.preventDefault()
@@ -114,7 +118,8 @@
                 <span class="av">
                   {#if p.avatar}<img src={p.avatar} alt="" />{:else}<span class="ini" style:background={g.color}>{initial(p)}</span>{/if}
                 </span>
-                {#if logo}
+                {#if logoOf(p.service)}
+                  {@const logo = logoOf(p.service)!}
                   <span class="badge" style:background="#{logo.hex}" aria-hidden="true">
                     <svg viewBox="0 0 24 24" width="9" height="9"><path d={logo.path} fill="#fff" /></svg>
                   </span>

@@ -22,22 +22,25 @@ describe('validatePins', () => {
       {
         categories: [
           { id: 'cat111aa', service: 'discord', name: 'MY HONEY', color: '#91D7E3' },
-          { id: 'cat111aa', service: 'discord', name: 'dup' },
-          { id: 'x', service: 'discord', name: 'bad id' }
+          { id: 'cat111aa', name: 'dup' },
+          { id: 'x', name: 'bad id' }
         ],
         items: [
           { id: 'pin111aa', service: 'discord', url: 'https://discord.com/channels/@me/1', name: ' Honey ', category: 'cat111aa' },
           { id: 'pin222bb', service: 'discord', url: 'https://discord.com/channels/@me/1', name: 'same url' },
           { id: 'pin333cc', service: 'discord', url: 'https://evil.com/x', name: 'evil' },
-          { id: 'pin444dd', service: 'discord', url: 'https://discord.com/channels/@me/2', category: 'nope', avatar: 'javascript:1' }
+          { id: 'pin444dd', service: 'discord', url: 'https://discord.com/channels/@me/2', category: 'nope', avatar: 'javascript:1' },
+          { id: 'pin555ee', service: 'instagram', url: 'https://www.instagram.com/direct/t/9', category: 'cat111aa' }
         ]
       },
       ok
     )
-    expect(p.categories).toEqual([{ id: 'cat111aa', service: 'discord', name: 'MY HONEY', color: '#91d7e3', collapsed: false }])
+    // Old files had a per-platform `service`; categories are global now.
+    expect(p.categories).toEqual([{ id: 'cat111aa', name: 'MY HONEY', color: '#91d7e3', collapsed: false }])
     expect(p.items.map((i) => [i.id, i.name, i.category, i.avatar])).toEqual([
       ['pin111aa', 'Honey', 'cat111aa', ''],
-      ['pin444dd', 'Chat', '', '']
+      ['pin444dd', 'Chat', '', ''],
+      ['pin555ee', 'Chat', 'cat111aa', '']
     ])
   })
   it('handles garbage', () => {
