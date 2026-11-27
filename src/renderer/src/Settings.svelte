@@ -33,6 +33,10 @@
     value: m as number,
     label: m === 0 ? 'Never' : m < 60 ? `${m} min` : `${m / 60} h`
   }))
+  const chatGlassPct = $derived(
+    Math.round(((s.chatGlass - LIMITS.minChatGlass) / (LIMITS.maxChatGlass - LIMITS.minChatGlass)) * 100)
+  )
+  const anySkin = $derived(s.order.some((id) => s.services[id]?.enabled && s.services[id]?.skin))
   const glassPct = $derived(
     Math.round(((s.glassOpacity - LIMITS.minGlass) / (LIMITS.maxGlass - LIMITS.minGlass)) * 100)
   )
@@ -128,6 +132,30 @@
         <span class="end">Solid</span>
       </div>
     </div>
+    <div class="row stacked">
+      <div class="line">
+        <div class="label">
+          <span class="title">Chat glass</span>
+          <span class="desc">
+            {anySkin
+              ? 'How see-through the chats are, for platforms with the iMessage look.'
+              : 'Turn on the iMessage look for a platform below to make its chats see-through.'}
+          </span>
+        </div>
+        <span class="value">{chatGlassPct} %</span>
+      </div>
+      <div class="control-line slider-line" class:dim={!anySkin}>
+        <span class="end">Clear</span>
+        <GlassSlider
+          label="Chat glass"
+          min={LIMITS.minChatGlass}
+          max={LIMITS.maxChatGlass}
+          value={s.chatGlass}
+          oninput={(v) => update({ chatGlass: v })}
+        />
+        <span class="end">Solid</span>
+      </div>
+    </div>
     <div class="row">
       <div class="label">
         <span class="title">Width</span>
@@ -186,8 +214,9 @@
   </div>
   {#if enabledCount <= 1}<p class="note">At least one platform stays on.</p>{/if}
   <p class="note">
-    iMessage look recolors the chat bubbles (blue for you, gray for them) using the site's own
-    theme colors. It's optional and may partly stop working when a site updates its design.
+    iMessage look: blue and gray bubbles, see-through glass chats, pill inputs and round blue
+    send buttons where the site allows. It's optional and may partly stop working when a site
+    updates its design.
   </p>
 
   <h3>Startup</h3>
@@ -324,6 +353,9 @@
   }
   .slider-line {
     padding-left: 0;
+  }
+  .dim {
+    opacity: 0.45;
   }
   .end {
     font-size: var(--fs-caption);

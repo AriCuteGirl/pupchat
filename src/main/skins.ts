@@ -23,6 +23,21 @@ const C = {
   pill: '20px'
 }
 
+/**
+ * See-through chats: the page gets a black tint with alpha --pup-a (the "Chat glass"
+ * setting, injected separately so the slider doesn't re-send the whole skin). Big
+ * background containers go transparent so PupChat's blurred glass shows through.
+ */
+const TINT = 'rgba(0, 0, 0, var(--pup-a, 0.6))'
+/** Frosted bars (headers, input area): a bit lighter than the page, blurred. */
+const BAR = `background-color: rgba(28, 28, 30, calc(var(--pup-a, 0.6) * 0.6 + 0.2)) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;`
+const BASE_GLASS = `
+html { background: ${TINT} !important; }
+body { background: transparent !important; }`
+/** Round blue send button. */
+const SEND = `background-color: ${'#0a84ff'} !important; border-radius: 50% !important; color: #fff !important;`
+
 /** "PupInter" is embedded where the site allows it; otherwise a local Inter or SF, then system. */
 const FONT = '"PupInter", "SF Pro Text", "Inter Variable", "Inter", -apple-system, system-ui, sans-serif'
 
@@ -44,19 +59,28 @@ const SKINS: Record<string, string> = {
   --WDS-systems-bubble-surface-incoming: ${C.gray} !important;
   --chat-bubble-border-radius: ${C.radius} !important;
   --bubble-meta: ${C.meta} !important;
-  /* Black chat background, no doodles. */
-  --WDS-systems-chat-background-wallpaper: ${C.black} !important;
+  /* See-through chat background, no doodles. */
+  --WDS-systems-chat-background-wallpaper: transparent !important;
   --WDS-systems-chat-foreground-wallpaper: transparent !important;
-  /* Pill input on a dark bar. */
-  --WDS-systems-chat-surface-composer: ${C.surface} !important;
-  --WDS-systems-chat-surface-tray: ${C.surface} !important;
+  --app-background: transparent !important;
+  --panel-background: transparent !important;
+  --panel-background-deep: transparent !important;
+  /* Pill input on a frosted bar. */
+  --WDS-systems-chat-surface-composer: transparent !important;
+  --WDS-systems-chat-surface-tray: transparent !important;
   --input-corner-radius: ${C.pill} !important;
-  --panel-input-background: ${C.surface2} !important;
-  --search-input-background: ${C.surface2} !important;
-  --panel-background: ${C.surface} !important;
-  --app-background: ${C.black} !important;
+  --panel-input-background: rgba(58, 58, 60, 0.7) !important;
+  --search-input-background: rgba(58, 58, 60, 0.7) !important;
   --font-family-default: ${FONT} !important;
 }
+${BASE_GLASS}
+#app, #app > div, #app > div > div, div.two, #side, #pane-side, #main,
+[data-testid="intro-panel"], [data-testid="conversation-panel-wrapper"] {
+  background-color: transparent !important;
+}
+#main header, #main footer, #side > header, [data-testid="chatlist-header"] { ${BAR} }
+button:has(span[data-icon*="send"]) { ${SEND} }
+button:has(span[data-icon*="send"]) span[data-icon] { color: #fff !important; }
 ${FONT_EVERYWHERE}`,
 
   telegram: `
@@ -74,10 +98,21 @@ ${FONT_EVERYWHERE}`,
   --color-chat-active: ${C.blue} !important;
   --composer-pill-radius: ${C.pill} !important;
   --composer-control-radius: ${C.pill} !important;
-  --color-background-sidebar: ${C.surface} !important;
   --color-borders-input: ${C.border} !important;
+  --theme-background-color: transparent !important;
   --font-family: ${FONT} !important;
 }
+${BASE_GLASS}
+#UiLoader, #Main, #LeftColumn, #LeftColumn-main, #MiddleColumn, #MiddleColumn > *, #RightColumn,
+.chat-list, .messages-layout, .Transition, .Transition_slide, .left-header {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+#MiddleColumn::before, #MiddleColumn::after { background: none !important; }
+/* Their messages: solid gray bubbles (and tails) so text stays readable on glass. */
+.Message:not(.own) { --background-color: ${C.gray} !important; --color-background: ${C.gray} !important; }
+.MiddleHeader, .middle-column-footer .Composer .composer-wrapper, .left-header { ${BAR} }
+.Composer .Button.send, .Composer .Button.main-button { ${SEND} }
 ${FONT_EVERYWHERE}`,
 
   messenger: `
@@ -87,13 +122,14 @@ ${FONT_EVERYWHERE}`,
   --chat-bubble-border-radius: ${C.radius} !important;
   --primary-button-background: ${C.blue} !important;
   --input-corner-radius: ${C.pill} !important;
-  --input-background: ${C.surface2} !important;
-  --search-input-background: ${C.surface2} !important;
-  --surface-background: ${C.black} !important;
-  --card-background: ${C.surface} !important;
-  --messenger-card-background: ${C.surface} !important;
+  --input-background: rgba(58, 58, 60, 0.7) !important;
+  --search-input-background: rgba(58, 58, 60, 0.7) !important;
+  --surface-background: transparent !important;
+  --messenger-card-background: transparent !important;
   --font-family-default: ${FONT} !important;
 }
+${BASE_GLASS}
+[role="main"], [role="navigation"], [role="banner"] { background-color: transparent !important; }
 ${FONT_EVERYWHERE}`,
 
   // Instagram's --ig-* colors are "r, g, b" triples used as rgb(var(--ig-...)).
@@ -104,17 +140,20 @@ ${FONT_EVERYWHERE}`,
   --ig-outgoing-message-bubble: 10, 132, 255 !important;
   --ig-incoming-message-bubble: 58, 58, 60 !important;
   --chat-bubble-border-radius: ${C.radius} !important;
-  --ig-primary-background: 0, 0, 0 !important;
-  --ig-secondary-background: 28, 28, 30 !important;
+  /* Space syntax with alpha: rgb(var(--ig-primary-background)) becomes transparent. */
+  --ig-primary-background: 0 0 0 / 0 !important;
+  --ig-secondary-background: 28 28 30 / 0.5 !important;
   --input-corner-radius: ${C.pill} !important;
   --input-border-radius: ${C.pill} !important;
   --ig-input-border-radius: ${C.pill} !important;
-  --input-background: ${C.surface2} !important;
-  --search-input-background: ${C.surface2} !important;
+  --input-background: rgba(58, 58, 60, 0.7) !important;
+  --search-input-background: rgba(58, 58, 60, 0.7) !important;
   --font-family-default: ${FONT} !important;
   --font-family-system: ${FONT} !important;
   --font-family-text: ${FONT} !important;
 }
+${BASE_GLASS}
+[role="main"], [role="navigation"] { background-color: transparent !important; }
 ${FONT_EVERYWHERE}`,
 
   // Discord has no bubbles: iMessage blacks and blue, a pill message box, the font.
@@ -123,13 +162,22 @@ ${FONT_EVERYWHERE}`,
   discord: `
 * {
   --brand-500: ${C.blue} !important;
-  --chat-background: ${C.black} !important;
-  --chat-background-default: ${C.black} !important;
-  --background-base-lowest: ${C.black} !important;
-  --background-base-lower: ${C.surface} !important;
-  --background-base-low: ${C.surface} !important;
-  --channeltextarea-background: ${C.surface2} !important;
+  --chat-background: transparent !important;
+  --chat-background-default: transparent !important;
+  --background-base-lowest: transparent !important;
+  --background-base-lower: transparent !important;
+  --background-base-low: transparent !important;
+  --background-primary: transparent !important;
+  --background-secondary: transparent !important;
+  --background-tertiary: transparent !important;
+  --channeltextarea-background: rgba(58, 58, 60, 0.7) !important;
   --font-primary: ${FONT} !important;
+}
+${BASE_GLASS}
+#app-mount, [class^="app_"], [class^="bg_"], [class*=" bg_"], [class^="chat_"], [class*=" chat_"],
+main[class*="chatContent_"], nav[class*="privateChannels_"], nav[class*="guilds_"],
+[class^="sidebar_"], [class*=" sidebar_"] {
+  background-color: transparent !important;
 }
 [class*="channelTextArea_"] [class*="scrollableContainer_"] {
   border-radius: ${C.pill} !important;
@@ -144,6 +192,12 @@ export function skinCss(serviceId: string, fontFace = ''): string | null {
   const css = SKINS[serviceId]
   if (!css) return null
   return fontFace ? `${fontFace}\n${css}` : css
+}
+
+/** Chat glass: how solid the page tint is (0 = clear, 1 = solid black). */
+export function glassCss(alpha: number): string {
+  const a = Math.min(1, Math.max(0, alpha))
+  return `html { --pup-a: ${a.toFixed(2)} !important; }`
 }
 
 /** Platforms whose font policy (CSP font-src) allows data: fonts, checked 2026-11-27. */

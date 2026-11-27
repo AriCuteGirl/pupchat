@@ -28,6 +28,8 @@ export interface Settings {
   side: 'right' | 'left'
   /** How solid the glass is: 0.15 (very see-through) to 0.95 (almost solid). */
   glassOpacity: number
+  /** With the iMessage look: how solid the chats' black tint is, 0.1 (clear) to 1 (solid). */
+  chatGlass: number
   /** Hide the panel when you click into another window. */
   hideOnBlur: boolean
   /** Minutes before an unused platform sleeps to save RAM; 0 = never. */
@@ -46,7 +48,9 @@ export const LIMITS = {
   minZoom: 0.5,
   maxZoom: 1.5,
   minGlass: 0.15,
-  maxGlass: 0.95
+  maxGlass: 0.95,
+  minChatGlass: 0.1,
+  maxChatGlass: 1
 } as const
 
 export const SLEEP_CHOICES = [0, 10, 30, 60, 120] as const
@@ -69,6 +73,7 @@ export function defaults(ids: readonly string[]): Settings {
     services: Object.fromEntries(ids.map((id) => [id, { ...DEFAULT_SERVICE_PREFS }])),
     side: 'right',
     glassOpacity: 0.38,
+    chatGlass: 0.55,
     hideOnBlur: false,
     sleepAfterMinutes: 0,
     gameMode: false,
@@ -129,6 +134,9 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
     glassOpacity: isNum(o['glassOpacity'])
       ? Math.round(clamp(o['glassOpacity'], LIMITS.minGlass, LIMITS.maxGlass) * 100) / 100
       : d.glassOpacity,
+    chatGlass: isNum(o['chatGlass'])
+      ? Math.round(clamp(o['chatGlass'], LIMITS.minChatGlass, LIMITS.maxChatGlass) * 100) / 100
+      : d.chatGlass,
     hideOnBlur: bool(o['hideOnBlur'], d.hideOnBlur),
     sleepAfterMinutes: (SLEEP_CHOICES as readonly number[]).includes(sleep) ? sleep : d.sleepAfterMinutes,
     gameMode: bool(o['gameMode'], d.gameMode),

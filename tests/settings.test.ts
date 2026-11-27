@@ -31,6 +31,8 @@ describe('validate', () => {
   })
   it('only accepts known sleep choices, sides and hotkeys', () => {
     expect(validate({ sleepAfterMinutes: 30 }, IDS).sleepAfterMinutes).toBe(30)
+    expect(validate({ chatGlass: 5 }, IDS).chatGlass).toBe(1)
+    expect(validate({ chatGlass: 0 }, IDS).chatGlass).toBe(0.1)
     expect(validate({ sleepAfterMinutes: 7 }, IDS).sleepAfterMinutes).toBe(0)
     expect(validate({ side: 'top' }, IDS).side).toBe('right')
     expect(validate({ side: 'left' }, IDS).side).toBe('left')

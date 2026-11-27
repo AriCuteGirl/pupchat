@@ -23,3 +23,18 @@ it('the embedded font only uses data: URLs and local() fonts', () => {
   expect(urls).toEqual(['data:font/woff2;base64,BBBB', 'data:font/woff2;base64,AAAA'])
   expect(css).toContain('local("Inter")')
 })
+
+it('every skin is well-formed CSS (balanced braces and parentheses)', () => {
+  for (const s of SERVICES) {
+    const css = skinCss(s.id)!
+    expect((css.match(/\{/g) ?? []).length, s.id).toBe((css.match(/\}/g) ?? []).length)
+    expect((css.match(/\(/g) ?? []).length, s.id).toBe((css.match(/\)/g) ?? []).length)
+  }
+})
+
+it('chat glass strength is clamped and formatted', async () => {
+  const { glassCss } = await import('../src/main/skins')
+  expect(glassCss(0.55)).toBe('html { --pup-a: 0.55 !important; }')
+  expect(glassCss(7)).toContain('--pup-a: 1.00')
+  expect(glassCss(-1)).toContain('--pup-a: 0.00')
+})

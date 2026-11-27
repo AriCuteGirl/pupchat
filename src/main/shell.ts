@@ -5,7 +5,7 @@ import { SERVICES, type ServiceDef } from '../shared/services'
 import { LIMITS, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
-import { EMBEDDED_FONT_OK, interFontFace, skinCss } from './skins'
+import { EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
 import { readFileSync } from 'node:fs'
 import { resourcePath } from './tray'
 import { createServiceView } from './serviceView'
@@ -14,6 +14,9 @@ import { servicesToSleep } from './sleep'
 interface Slot {
   /** insertCSS key of the iMessage look, when applied to the current page. */
   skinKey: string | null
+  /** insertCSS key of the chat glass strength, and the value it was made for. */
+  glassKey: string | null
+  glassFor: number
   def: ServiceDef
   view: WebContentsView | null
   status: ServiceStatus
@@ -65,7 +68,9 @@ export class Shell {
         needsLogin: false,
         lastUsed: 0,
         retryTimer: null,
-        skinKey: null
+        skinKey: null,
+        glassKey: null,
+        glassFor: -1
       })
     this.active = this.listed()[0]!.def.id
     win.on('resize', () => this.layout())
@@ -255,6 +260,17 @@ export class Shell {
       slot.skinKey = null
       await wc.removeInsertedCSS(key).catch(() => {})
     }
+    // Chat glass strength: a tiny separate stylesheet, swapped when the slider moves.
+    const alpha = this.settings.chatGlass
+    if (slot.glassKey && (!want || slot.glassFor !== alpha)) {
+      const key = slot.glassKey
+      slot.glassKey = null
+      await wc.removeInsertedCSS(key).catch(() => {})
+    }
+    if (want && !slot.glassKey) {
+      slot.glassKey = await wc.insertCSS(glassCss(alpha), { cssOrigin: 'author' })
+      slot.glassFor = alpha
+    }
   }
 
   private syncVisibility(): void {
@@ -303,6 +319,7 @@ export class Shell {
     // A new document loses inserted CSS: re-apply the look on every load.
     wc.on('dom-ready', () => {
       slot.skinKey = null
+      slot.glassKey = null
       void this.applySkin(slot)
     })
     wc.on('did-finish-load', () => {
@@ -341,6 +358,7 @@ export class Shell {
     }
     slot.view = null
     slot.skinKey = null
+    slot.glassKey = null
     slot.unread = 0
     slot.needsLogin = false
     slot.status = status
