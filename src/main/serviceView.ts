@@ -19,6 +19,10 @@ function lockDownSession(id: string): Electron.Session {
   return ses
 }
 
+function isBlankPopup(url: string): boolean {
+  return url === '' || url === 'about:blank' || url === 'about://blank'
+}
+
 export function createServiceView(service: ServiceDef): WebContentsView {
   const view = new WebContentsView({
     webPreferences: {
@@ -37,11 +41,44 @@ export function createServiceView(service: ServiceDef): WebContentsView {
     if (isExternalSafe(url)) void shell.openExternal(url)
   }
 
-  // New windows: same-service popups stay in a link click, the rest go to the browser.
-  wc.setWindowOpenHandler(({ url }) => {
+  // Where a link or popup really wants to go: the platform's own pages open in the view,
+  // anything else in your default browser.
+  const route = (url: string): void => {
     if (isServiceUrl(service, url)) void wc.loadURL(url)
     else openOutside(url)
+  }
+
+  // New windows. Many sites open an empty window first (about:blank) and point it somewhere
+  // a moment later; that one is allowed hidden, its first real address is routed, then it closes.
+  wc.setWindowOpenHandler(({ url }) => {
+    if (isBlankPopup(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          show: false,
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+        }
+      }
+    }
+    route(url)
     return { action: 'deny' }
+  })
+  wc.on('did-create-window', (child) => {
+    const cwc = child.webContents
+    let done = false
+    const take = (e: Electron.Event | null, url: string): void => {
+      if (done || isBlankPopup(url)) return
+      done = true
+      e?.preventDefault()
+      route(url)
+      setImmediate(() => !child.isDestroyed() && child.destroy())
+    }
+    cwc.on('will-navigate', (e, url) => take(e, url))
+    cwc.on('will-redirect', (e, url) => take(e, url))
+    cwc.on('did-start-navigation', (d) => take(null, d.url))
+    cwc.setWindowOpenHandler(() => ({ action: 'deny' }))
+    // Nothing came: don't leave a hidden window behind.
+    setTimeout(() => !child.isDestroyed() && child.destroy(), 15_000)
   })
 
   // Keep the view on its own domains.

@@ -12,6 +12,8 @@ const api: ShellApi = {
   setCollapsed: (c) => ipcRenderer.send(CH.setCollapsed, c),
   retry: (id) => ipcRenderer.send(CH.retry, id),
   setPanelWidth: (px) => ipcRenderer.send(CH.setPanelWidth, px),
-  resetZoom: () => ipcRenderer.send(CH.resetZoom)
+  resetZoom: () => ipcRenderer.send(CH.resetZoom),
+  home: (id) => ipcRenderer.send(CH.home, id),
+  reload: (id) => ipcRenderer.send(CH.reload, id)
 }
 contextBridge.exposeInMainWorld('pupchat', api)

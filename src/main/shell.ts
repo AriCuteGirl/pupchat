@@ -140,10 +140,16 @@ export class Shell {
     this.emit()
   }
 
+  /** Back to the platform's start page. Also used by "Try again". */
   retry(id: string): void {
     const slot = this.slots.get(id)
-    if (!slot?.view) return
+    if (!slot) return
+    if (!slot.view) return this.select(id)
     slot.view.webContents.loadURL(slot.def.url).catch(() => {})
+  }
+
+  reload(id: string): void {
+    this.slots.get(id)?.view?.webContents.reload()
   }
 
   private syncVisibility(): void {
@@ -195,6 +201,8 @@ export class Shell {
       if (!isMainFrame || code === -3) return
       this.setStatus(slot, OFFLINE_CODES.has(code) ? 'offline' : 'error')
     })
+    // A crashed page is reloaded by the view; show the loading pup meanwhile, not a blank area.
+    wc.on('render-process-gone', () => this.setStatus(slot, 'loading'))
     wc.on('did-navigate', (_e, url) => this.checkLogin(slot, url))
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame) this.checkLogin(slot, url)
@@ -256,6 +264,12 @@ export class Shell {
     })
     ipcMain.on(CH.setPanelWidth, (e, px: unknown) => {
       if (fromShell(e) && typeof px === 'number' && Number.isFinite(px)) this.setPanelWidth(px)
+    })
+    ipcMain.on(CH.home, (e, id: unknown) => {
+      if (fromShell(e) && typeof id === 'string') this.retry(id)
+    })
+    ipcMain.on(CH.reload, (e, id: unknown) => {
+      if (fromShell(e) && typeof id === 'string') this.reload(id)
     })
     ipcMain.on(CH.resetZoom, (e) => {
       if (fromShell(e)) this.zoomActive(0)

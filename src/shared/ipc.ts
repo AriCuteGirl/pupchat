@@ -30,6 +30,8 @@ export const CH = {
   retry: 'pupchat:retry',
   setPanelWidth: 'pupchat:set-panel-width',
   resetZoom: 'pupchat:reset-zoom',
+  home: 'pupchat:home',
+  reload: 'pupchat:reload',
   pawUnread: 'pupchat:paw-unread'
 } as const
 
@@ -41,4 +43,7 @@ export interface ShellApi {
   retry(id: string): void
   setPanelWidth(px: number): void
   resetZoom(): void
+  /** Back to the platform's start page (way out of a stuck or wrong page). */
+  home(id: string): void
+  reload(id: string): void
 }

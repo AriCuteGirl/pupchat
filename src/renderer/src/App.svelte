@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw } from '@lucide/svelte'
+  import { House, PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw } from '@lucide/svelte'
   import type { ServiceState, ShellApi, ShellState } from '../../shared/ipc'
   import { LAYOUT, sidebarWidth } from '../../shared/layout'
   import { serviceIcon } from './lib/icons'
@@ -158,6 +158,16 @@
           {/if}
         </span>
         {#if active?.needsLogin}<span class="hint">Log in below to start chatting</span>{/if}
+        {#if active && active.status !== 'idle' && active.status !== 'asleep'}
+          <div class="tools">
+            <button class="icon-btn" aria-label="Back to {active.name} start page" title="Start page" onclick={() => api.home(active.id)}>
+              <House size={17} />
+            </button>
+            <button class="icon-btn" aria-label="Reload {active.name}" title="Reload" onclick={() => api.reload(active.id)}>
+              <RotateCw size={16} />
+            </button>
+          </div>
+        {/if}
       </header>
       <div class="stage">
         {#if active?.status === 'loading' || active?.status === 'idle'}
@@ -429,6 +439,23 @@
     align-items: center;
     justify-content: center;
     gap: 1px;
+  }
+  .header {
+    position: relative;
+  }
+  .tools {
+    position: absolute;
+    right: var(--sp-3);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: var(--sp-1);
+  }
+  .tools .icon-btn {
+    color: var(--c-text-2);
+  }
+  .tools .icon-btn:hover {
+    color: var(--c-text);
   }
   .hint {
     font-size: var(--fs-caption);
