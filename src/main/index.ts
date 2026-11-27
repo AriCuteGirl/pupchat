@@ -369,7 +369,10 @@ async function start(): Promise<void> {
   })
 
   // Settings that act outside the shell.
-  p.onChange(() => shell.applyAudio()) // game mode: quiet while hidden
+  p.onChange(() => {
+    shell.applyAudio() // game mode: quiet while hidden
+    shell.syncVisibility() // pages count as background tabs while the panel is hidden
+  })
   p.onOtherWindowFocused(() => {
     if (shell.current.hideOnBlur && p.isVisible) void p.hide()
   })

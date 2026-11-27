@@ -507,9 +507,15 @@ export class Shell {
     }
   }
 
-  private syncVisibility(): void {
+  /**
+   * Only the open platform is visible, and only while the panel is shown. A hidden panel
+   * makes every page a background tab (document.visibilityState = "hidden"), which is when
+   * sites send their own notifications (sender + preview), and they use less CPU while you play.
+   */
+  syncVisibility(): void {
+    const panel = this.isPanelVisible()
     for (const s of this.slots.values())
-      s.view?.setVisible(!this.settingsOpen && s.def.id === this.active && s.status === 'ready')
+      s.view?.setVisible(panel && !this.settingsOpen && s.def.id === this.active && s.status === 'ready')
   }
 
   private setStatus(slot: Slot, status: ServiceStatus): void {
