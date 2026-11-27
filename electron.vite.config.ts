@@ -7,7 +7,7 @@ export default defineConfig({
   preload: {
     build: {
       rollupOptions: {
-        input: { paw: resolve('src/preload/paw.ts') },
+        input: { paw: resolve('src/preload/paw.ts'), shell: resolve('src/preload/shell.ts') },
         // Sandboxed preloads must be CommonJS.
         output: { format: 'cjs', entryFileNames: '[name].cjs' }
       }

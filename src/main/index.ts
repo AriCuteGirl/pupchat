@@ -1,14 +1,12 @@
 import { app, BrowserWindow, screen, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { SERVICES } from '../shared/services'
+import { panelWidth } from '../shared/layout'
 import { isCliCommand, parseCli, type CliCommand } from './cli'
-import { isHyprland, workspaceOf, SPECIAL } from './hyprland'
+import { isHyprland, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
-import { createPaw } from './paw'
-import { createServiceView } from './serviceView'
+import { createPaw, PAW_TITLE } from './paw'
+import { Shell } from './shell'
 
-const PANEL_WIDTH = 420
-const RAIL_WIDTH = 56
 const PANEL_TITLE = 'PupChat'
 
 app.setName('PupChat')
@@ -23,40 +21,57 @@ if (!app.requestSingleInstanceLock(launch as unknown as Record<string, unknown>)
 
 async function start(): Promise<void> {
   const area = screen.getPrimaryDisplay().workArea
+  const width = panelWidth(false)
   const win = new BrowserWindow({
     title: PANEL_TITLE,
-    width: PANEL_WIDTH,
+    width,
     height: area.height,
-    x: area.x + area.width - PANEL_WIDTH,
+    x: area.x + area.width - width,
     y: area.y,
     frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
     show: false,
     skipTaskbar: true,
-    backgroundColor: '#1c1c1e',
-    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false }
+    webPreferences: {
+      preload: join(import.meta.dirname, '../preload/shell.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false
+    }
   })
   // Keep our title so Hyprland rules and our own lookups can find the window.
   win.on('page-title-updated', (e) => e.preventDefault())
-
-  const service = SERVICES[0]!
-  const view = createServiceView(service)
-  win.contentView.addChildView(view)
-  const layout = (): void => {
-    const { width, height } = win.getContentBounds()
-    view.setBounds({ x: RAIL_WIDTH, y: 0, width: Math.max(0, width - RAIL_WIDTH), height })
-  }
-  win.on('resize', layout)
-  layout()
-
   win.webContents.on('will-navigate', (e) => e.preventDefault())
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+  // Keys handled before the page sees them, in the shell and in every service view.
+  const keys = (wc: WebContents): void => {
+    wc.on('before-input-event', (e, input) => {
+      if (input.type !== 'keyDown') return
+      const plain = !input.control && !input.alt && !input.meta && !input.shift
+      if (input.key === 'Escape' && plain) {
+        e.preventDefault()
+        void panel?.hide()
+      } else if (input.control && input.shift && !input.alt && input.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        shell?.setCollapsed(!shell.isCollapsed)
+      }
+    })
+  }
+  keys(win.webContents)
+  // Every web contents created from now on (service views, paw) gets the same keys.
+  app.on('web-contents-created', (_e, wc) => keys(wc))
+
+  // Registered before any service view exists, so every view gets the keys.
+  let panel: Panel | null = null
+  const shell: Shell = new Shell(win)
+
   if (process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
-
   await new Promise<void>((r) => win.once('ready-to-show', () => r()))
 
   // On Hyprland the window rule may already have put us on special:pupchat.
-  // Mapping the window is needed either way; where it lands decides the backend.
   let mode: 'special' | 'window' = 'window'
   if (isHyprland()) {
     win.showInactive()
@@ -66,34 +81,56 @@ async function start(): Promise<void> {
     else win.hide()
     console.log(`[pupchat] window on workspace ${ws ?? '?'}, using "${mode}" mode`)
   }
-  const panel = new Panel(win, mode)
+  const p = new Panel(win, mode)
+  panel = p
+
+  // Flush to the right edge, full height; width follows the collapsed state.
+  const place = (): void => {
+    const w = panelWidth(shell.isCollapsed)
+    if (isHyprland()) void placePanel(PANEL_TITLE, w).catch((e) => console.warn('[pupchat] place:', e))
+    else {
+      const wa = screen.getDisplayMatching(win.getBounds()).workArea
+      win.setBounds({ x: wa.x + wa.width - w, y: wa.y, width: w, height: wa.height })
+    }
+  }
+  let lastCollapsed = shell.isCollapsed
+  shell.onState((s) => {
+    if (s.collapsed !== lastCollapsed) {
+      lastCollapsed = s.collapsed
+      place()
+    }
+  })
 
   // Focus the chat when the panel appears, so you can type right away.
-  const focusChat = (): void => view.webContents.focus()
+  const focusChat = (): void => shell.activeView()?.webContents.focus()
   win.on('focus', focusChat)
-  panel.onChange((v) => v && focusChat())
+  p.onChange((v) => {
+    if (!v) return
+    place()
+    focusChat()
+  })
 
-  // Esc (no modifiers) hides the panel, from the rail or from inside the chat.
-  const escHides = (wc: WebContents): void => {
-    wc.on('before-input-event', (e, input) => {
-      if (input.type === 'keyDown' && input.key === 'Escape' && !input.control && !input.alt && !input.meta && !input.shift) {
-        e.preventDefault()
-        void panel.hide()
-      }
-    })
+  // The paw stays visible: on the screen edge when closed, beside the panel when open,
+  // so one click opens and the next click slides the panel away again.
+  const paw = createPaw(() => void p.toggleFromPaw())
+  const placeTheWholeEdge = (): void => {
+    const w = panelWidth(shell.isCollapsed)
+    if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w).catch(() => {})
+    else {
+      const wa = screen.getDisplayMatching(win.getBounds()).workArea
+      const x = p.isVisible ? wa.x + wa.width - w - 62 : wa.x + wa.width - 64
+      paw.setPosition(x, Math.round(wa.y + wa.height * 0.45))
+    }
   }
-  escHides(win.webContents)
-  escHides(view.webContents)
-
-  // The paw hides while the panel is open (the panel covers that edge anyway).
-  const paw = createPaw(() => void panel.toggle())
-  panel.onChange((v) => (v ? paw.hide() : paw.showInactive()))
+  p.onChange(placeTheWholeEdge)
+  shell.onState(placeTheWholeEdge)
+  paw.once('show', placeTheWholeEdge)
 
   const run = (cmd: CliCommand): void => {
-    // --service is accepted now; switching services arrives with the other services (step 4).
-    if (cmd.action === 'toggle') void panel.toggle()
-    else if (cmd.action === 'show') void panel.show()
-    else if (cmd.action === 'hide') void panel.hide()
+    if (cmd.service) shell.select(cmd.service)
+    if (cmd.action === 'toggle') void p.toggle()
+    else if (cmd.action === 'show') void p.show()
+    else if (cmd.action === 'hide') void p.hide()
   }
   app.on('second-instance', (_e, _argv, _cwd, data) => {
     if (isCliCommand(data)) run(data)

@@ -5,6 +5,8 @@ export interface ServiceDef {
   url: string
   /** Hosts the view may navigate to. A leading "." also matches subdomains. */
   hosts: string[]
+  /** simple-icons export name for the logo (used unmodified). */
+  icon: string
 }
 
 export const SERVICES: readonly ServiceDef[] = [
@@ -12,7 +14,8 @@ export const SERVICES: readonly ServiceDef[] = [
     id: 'whatsapp',
     name: 'WhatsApp',
     url: 'https://web.whatsapp.com',
-    hosts: ['web.whatsapp.com', '.whatsapp.com', '.whatsapp.net']
+    hosts: ['web.whatsapp.com', '.whatsapp.com', '.whatsapp.net'],
+    icon: 'siWhatsapp'
   }
 ]
 

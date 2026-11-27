@@ -5,12 +5,17 @@ import { chromeUserAgent } from './userAgent'
 
 const UA = chromeUserAgent(process.versions.chrome, process.platform)
 
-/** Grants only notifications; mic/camera/screen become opt-in per service later. */
+/**
+ * Allowed by default: notifications, and copying to the clipboard (sites use it for
+ * "copy GIF/link"). Mic/camera/screen become opt-in per service later.
+ */
+const DEFAULT_ALLOWED = new Set(['notifications', 'clipboard-sanitized-write'])
+
 function lockDownSession(id: string): Electron.Session {
   const ses = session.fromPartition(partitionFor(id))
   ses.setUserAgent(UA)
-  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'notifications'))
-  ses.setPermissionCheckHandler((_wc, permission) => permission === 'notifications')
+  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(DEFAULT_ALLOWED.has(permission)))
+  ses.setPermissionCheckHandler((_wc, permission) => DEFAULT_ALLOWED.has(permission))
   return ses
 }
 

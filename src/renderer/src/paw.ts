@@ -1,3 +1,4 @@
+import './lib/tokens.css'
 import { mount } from 'svelte'
 import Paw from './Paw.svelte'
 

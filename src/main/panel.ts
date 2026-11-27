@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import { focusPanel, isHyprland, isSpecialOpen, toggleSpecial, watchSpecial } from './hyprland'
+import { focusPanel, HyprEvents, isHyprland, isSpecialOpen, toggleSpecial } from './hyprland'
 
 /**
  * Shows/hides the chat panel. Two backends:
@@ -10,13 +10,14 @@ import { focusPanel, isHyprland, isSpecialOpen, toggleSpecial, watchSpecial } fr
 export class Panel {
   private visible = false
   private listeners: Array<(v: boolean) => void> = []
+  private events: HyprEvents | null = null
 
   constructor(
     private readonly win: BrowserWindow,
     readonly mode: 'special' | 'window'
   ) {
     if (mode === 'special') {
-      watchSpecial((open) => {
+      this.events = new HyprEvents(process.pid, (open) => {
         this.setVisible(open)
         if (open) void focusPanel(win.getTitle()).catch(() => {})
       })
@@ -58,6 +59,13 @@ export class Panel {
     } else {
       this.win.hide()
     }
+  }
+
+  /** For the paw: closing from a click must not leave focus on the paw. */
+  async toggleFromPaw(): Promise<void> {
+    const wasOpen = this.visible
+    await this.toggle()
+    if (wasOpen) await this.events?.refocusPrevious()
   }
 
   async toggle(): Promise<void> {
