@@ -16,17 +16,40 @@ function hyprctl(args: string[]): Promise<string> {
   })
 }
 
+/** Opening/closing a special workspace also warps the cursor; do it without moving it. */
 export function toggleSpecial(): Promise<string> {
-  return hyprctl(['dispatch', `hl.dsp.workspace.toggle_special("${SPECIAL}")`])
+  return noWarp(`hl.dispatch(hl.dsp.workspace.toggle_special("${SPECIAL}"))`)
+}
+
+/**
+ * Focus a window without moving the mouse cursor. Hyprland's focus always warps the cursor,
+ * so in one Lua call we switch cursor.no_warps on, focus, and put your value back.
+ * Nothing in your config files changes.
+ */
+function noWarp(luaCall: string): Promise<string> {
+  const lua =
+    'local old = hl.get_config("cursor.no_warps"); ' +
+    'hl.config({ cursor = { no_warps = true } }); ' +
+    `${luaCall}; ` +
+    'hl.config({ cursor = { no_warps = old } })'
+  return hyprctl(['eval', lua])
+}
+
+function focusNoWarp(selector: string): Promise<string> {
+  return noWarp(`hl.dispatch(hl.dsp.focus({ window = "${selector}" }))`)
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** Special workspaces open without focusing anything; focus our panel so typing works at once. */
 export function focusPanel(title: string): Promise<string> {
-  const re = `^(${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})$`
-  return hyprctl(['dispatch', `hl.dsp.focus({ window = "title:${re}" })`])
+  return focusNoWarp(`title:^(${escapeRe(title)})$`)
 }
 
 interface Monitor {
+  id: number
   x: number
   y: number
   width: number
@@ -47,10 +70,15 @@ export interface EdgeGeometry {
 
 const PAW = 56
 
-async function edgeGeometry(width: number): Promise<EdgeGeometry | null> {
+/**
+ * The monitor PupChat belongs on: where the panel is open; otherwise the monitor of the
+ * window you last clicked into (`homeMonitor`); otherwise Hyprland's focused monitor.
+ */
+async function edgeGeometry(width: number, homeMonitor: number | null = null): Promise<EdgeGeometry | null> {
   const monitors = JSON.parse(await hyprctl(['-j', 'monitors'])) as Monitor[]
   const m =
     monitors.find((x) => x.specialWorkspace?.name === `special:${SPECIAL}`) ??
+    monitors.find((x) => x.id === homeMonitor) ??
     monitors.find((x) => x.focused) ??
     monitors[0]
   if (!m) return null
@@ -83,8 +111,13 @@ export async function placePanel(title: string, width: number): Promise<void> {
  * The paw rides along: on the screen edge while the panel is closed, against the panel's
  * left edge while it is open (Hyprland animates the move, so it slides).
  */
-export async function placePaw(title: string, panelOpen: boolean, panelWidth: number): Promise<void> {
-  const g = await edgeGeometry(panelWidth)
+export async function placePaw(
+  title: string,
+  panelOpen: boolean,
+  panelWidth: number,
+  homeMonitor: number | null
+): Promise<void> {
+  const g = await edgeGeometry(panelWidth, homeMonitor)
   if (!g) return
   const x = panelOpen ? g.panel.x - PAW - 6 : g.right - PAW - 8
   await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${g.pawY}, relative = false, window = "${sel(title)}" })`])
@@ -114,9 +147,15 @@ export async function workspaceOf(pid: number, title: string): Promise<string | 
  */
 export class HyprEvents {
   private lastOther: string | null = null
+  /** Monitor of the window you last clicked into (outside PupChat). */
+  homeMonitor: number | null = null
   private ours = new Set<string>()
 
-  constructor(private readonly pid: number, onSpecial: (open: boolean) => void) {
+  constructor(
+    private readonly pid: number,
+    onSpecial: (open: boolean) => void,
+    private readonly onMonitor: () => void = () => {}
+  ) {
     const sig = process.env['HYPRLAND_INSTANCE_SIGNATURE']
     const runtime = process.env['XDG_RUNTIME_DIR']
     if (!sig || !runtime) return
@@ -155,14 +194,24 @@ export class HyprEvents {
 
   private async noteActive(addr: string): Promise<void> {
     if (this.ours.has(addr)) return
-    const clients = JSON.parse(await hyprctl(['-j', 'clients'])) as Array<{ address: string; pid: number }>
+    const clients = JSON.parse(await hyprctl(['-j', 'clients'])) as Array<{
+      address: string
+      pid: number
+      monitor: number
+    }>
     for (const c of clients) if (c.pid === this.pid) this.ours.add(c.address)
-    if (!this.ours.has(addr)) this.lastOther = addr
+    if (this.ours.has(addr)) return
+    this.lastOther = addr
+    // follow_mouse = 0: focus (and so this) changes when you click into a window, not on hover.
+    const mon = clients.find((c) => c.address === addr)?.monitor ?? null
+    if (mon !== null && mon !== this.homeMonitor) {
+      this.homeMonitor = mon
+      this.onMonitor()
+    }
   }
 
   /** Give focus back to the window you were in before PupChat (e.g. the game). */
   async refocusPrevious(): Promise<void> {
-    if (this.lastOther)
-      await hyprctl(['dispatch', `hl.dsp.focus({ window = "address:${this.lastOther}" })`]).catch(() => {})
+    if (this.lastOther) await focusNoWarp(`address:${this.lastOther}`).catch(() => {})
   }
 }

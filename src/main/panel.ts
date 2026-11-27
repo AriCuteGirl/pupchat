@@ -10,6 +10,7 @@ import { focusPanel, HyprEvents, isHyprland, isSpecialOpen, toggleSpecial } from
 export class Panel {
   private visible = false
   private listeners: Array<(v: boolean) => void> = []
+  private monitorListeners: Array<() => void> = []
   private events: HyprEvents | null = null
 
   constructor(
@@ -17,10 +18,14 @@ export class Panel {
     readonly mode: 'special' | 'window'
   ) {
     if (mode === 'special') {
-      this.events = new HyprEvents(process.pid, (open) => {
-        this.setVisible(open)
-        if (open) void focusPanel(win.getTitle()).catch(() => {})
-      })
+      this.events = new HyprEvents(
+        process.pid,
+        (open) => {
+          this.setVisible(open)
+          if (open) void focusPanel(win.getTitle()).catch(() => {})
+        },
+        () => this.monitorListeners.forEach((fn) => fn())
+      )
       void isSpecialOpen().then((o) => this.setVisible(o), () => {})
     } else {
       win.on('show', () => this.setVisible(true))
@@ -34,6 +39,16 @@ export class Panel {
 
   onChange(fn: (v: boolean) => void): void {
     this.listeners.push(fn)
+  }
+
+  /** Monitor of the window you last clicked into (Hyprland only). */
+  get homeMonitor(): number | null {
+    return this.events?.homeMonitor ?? null
+  }
+
+  /** You clicked into a window on another monitor (Hyprland only). */
+  onMonitorChange(fn: () => void): void {
+    this.monitorListeners.push(fn)
   }
 
   private setVisible(v: boolean): void {

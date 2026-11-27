@@ -157,7 +157,7 @@ async function start(): Promise<void> {
   const paw = createPaw(() => void p.toggleFromPaw())
   const placeTheWholeEdge = (): void => {
     const w = windowWidth(shell.panelWidth, shell.isCollapsed)
-    if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w).catch(() => {})
+    if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w, p.homeMonitor).catch(() => {})
     else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
       const x = p.isVisible ? wa.x + wa.width - w - 62 : wa.x + wa.width - 64
@@ -165,6 +165,10 @@ async function start(): Promise<void> {
     }
   }
   p.onChange(placeTheWholeEdge)
+  // The paw lives on the monitor you last clicked into; while the panel is open it stays beside it.
+  p.onMonitorChange(() => {
+    if (!p.isVisible) placeTheWholeEdge()
+  })
   let lastPawWidth = -1
   shell.onState((st) => {
     const w = windowWidth(st.panelWidth, st.collapsed)
