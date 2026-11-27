@@ -69,6 +69,22 @@ pnpm dist:linux      # → dist/PupChat-<version>-x86_64.AppImage
 
 Turn on **Settings → Startup → Launch at login** to start PupChat (hidden) every time you log in.
 
+### Flatpak (any distro)
+Download `PupChat-<version>-x86_64.flatpak` from [Releases](https://github.com/AriCuteGirl/pupchat/releases), then:
+
+```bash
+flatpak install --user PupChat-0.1.0-x86_64.flatpak
+flatpak run world.puppygirl.PupChat
+```
+
+It needs the Flathub remote (for the Freedesktop 25.08 runtime and Electron base).
+
+### NixOS
+```bash
+nix run github:AriCuteGirl/pupchat
+```
+More in [packaging/nix](packaging/nix/README.md).
+
 ### Windows 10 / 11
 Download `PupChat-Setup-<version>.exe` from [Releases](https://github.com/AriCuteGirl/pupchat/releases)
 or build it with `pnpm dist:win`.
