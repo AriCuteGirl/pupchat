@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { House, PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw } from '@lucide/svelte'
+  import { Bone, House, PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw, Settings as Gear } from '@lucide/svelte'
+  import Settings from './Settings.svelte'
   import type { ServiceState, ShellApi, ShellState } from '../../shared/ipc'
   import { LAYOUT, sidebarWidth } from '../../shared/layout'
   import { serviceIcon } from './lib/icons'
@@ -54,7 +55,8 @@
     if (frame) return
     frame = requestAnimationFrame(() => {
       frame = 0
-      api.setPanelWidth(dragStart - moved)
+      // Docked right, dragging left grows the panel; docked left, dragging right does.
+      api.setPanelWidth(shell?.settings.side === 'left' ? dragStart + moved : dragStart - moved)
     })
   }
   function endDrag(): void {
@@ -62,8 +64,10 @@
   }
   function resizeKey(e: KeyboardEvent): void {
     if (!shell) return
-    if (e.key === 'ArrowLeft') api.setPanelWidth(shell.panelWidth + 20)
-    else if (e.key === 'ArrowRight') api.setPanelWidth(shell.panelWidth - 20)
+    const grow = shell.settings.side === 'left' ? 'ArrowRight' : 'ArrowLeft'
+    const shrink = shell.settings.side === 'left' ? 'ArrowLeft' : 'ArrowRight'
+    if (e.key === grow) api.setPanelWidth(shell.panelWidth + 20)
+    else if (e.key === shrink) api.setPanelWidth(shell.panelWidth - 20)
   }
 
   const label = (u: number | 'dot'): string => (u === 'dot' ? '' : u > 99 ? '99+' : String(u))
@@ -78,11 +82,14 @@
     style:--header-h="{LAYOUT.headerHeight}px"
     style:--inset="{LAYOUT.inset}px"
     style:--view-r="{LAYOUT.viewRadius}px"
+    style:--glass-fill="rgba(30, 30, 36, {shell.settings.glassOpacity})"
+    style:--glass-fill-strong="rgba(30, 30, 36, {Math.min(0.96, shell.settings.glassOpacity + 0.22)})"
   >
     <!-- A focusable separator moved with arrow keys is the ARIA "window splitter" pattern. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
     <div
       class="grip"
+      class:left-dock={shell.settings.side === 'left'}
       class:dragging
       role="separator"
       aria-orientation="vertical"
@@ -145,12 +152,34 @@
           </button>
         {/each}
       </nav>
+      <div class="foot">
+        <button
+          class="icon-btn"
+          class:on={shell.settings.gameMode}
+          aria-pressed={shell.settings.gameMode}
+          aria-label="Game mode"
+          title={shell.settings.gameMode ? 'Game mode on: no banners or sounds while hidden' : 'Game mode'}
+          onclick={() => api.updateSettings({ gameMode: !shell!.settings.gameMode })}
+        >
+          <Bone size={18} />
+        </button>
+        <button
+          class="icon-btn"
+          class:on={shell.settingsOpen}
+          aria-pressed={shell.settingsOpen}
+          aria-label="Settings"
+          title="Settings"
+          onclick={() => api.setSettingsOpen(!shell!.settingsOpen)}
+        >
+          <Gear size={18} />
+        </button>
+      </div>
     </aside>
 
     <section class="main">
       <header class="header">
         <span class="headline">
-          {active?.name ?? ''}
+          {shell.settingsOpen ? 'PupChat' : (active?.name ?? '')}
           {#if shell.activeZoom !== 1}
             <button class="zoom" title="Reset zoom (Ctrl+0)" onclick={() => api.resetZoom()}
               >{Math.round(shell.activeZoom * 100)} %</button
@@ -158,7 +187,7 @@
           {/if}
         </span>
         {#if active?.needsLogin}<span class="hint">Log in below to start chatting</span>{/if}
-        {#if active && active.status !== 'idle' && active.status !== 'asleep'}
+        {#if active && !shell.settingsOpen && active.status !== 'idle' && active.status !== 'asleep'}
           <div class="tools">
             <button class="icon-btn" aria-label="Back to {active.name} start page" title="Start page" onclick={() => api.home(active.id)}>
               <House size={17} />
@@ -169,8 +198,10 @@
           </div>
         {/if}
       </header>
-      <div class="stage">
-        {#if active?.status === 'loading' || active?.status === 'idle'}
+      <div class="stage" class:full={shell.settingsOpen}>
+        {#if shell.settingsOpen}
+          <Settings {shell} {api} />
+        {:else if active?.status === 'loading' || active?.status === 'idle'}
           <div class="state" role="status">
             <SleepyPup />
             <div class="skeleton" aria-hidden="true">
@@ -231,6 +262,10 @@
     opacity: 0;
     transition: opacity var(--dur-fast);
   }
+  .grip.left-dock {
+    left: auto;
+    right: 0;
+  }
   .grip:hover::after,
   .grip.dragging::after,
   .grip:focus-visible::after {
@@ -289,6 +324,26 @@
   }
   .icon-btn:hover {
     background: var(--glass-hover);
+  }
+  .foot {
+    margin-top: auto;
+    display: flex;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-1) 0;
+  }
+  .collapsed .foot {
+    flex-direction: column;
+    align-items: center;
+  }
+  .foot .icon-btn {
+    color: var(--c-text-2);
+  }
+  .foot .icon-btn:hover {
+    color: var(--c-text);
+  }
+  .foot .icon-btn.on {
+    color: var(--c-collar);
+    background: var(--glass-selected);
   }
   .list {
     display: flex;
@@ -465,8 +520,13 @@
     font-size: var(--fs-headline);
     font-weight: var(--fw-medium);
   }
+  .stage.full {
+    display: block;
+    overflow: hidden;
+  }
   .stage {
     flex: 1;
+    min-height: 0;
     margin: 0 var(--inset) var(--inset) 0;
     border-radius: var(--view-r);
     background: var(--glass-fill-strong);

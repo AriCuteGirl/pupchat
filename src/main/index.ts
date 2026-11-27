@@ -7,8 +7,9 @@ import { isCliCommand, parseCli, type CliCommand } from './cli'
 import { isHyprland, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
 import { createPaw, PAW_TITLE } from './paw'
+import { setLaunchAtLogin } from './autostart'
 import { loadSettings, makeSaver } from './settings'
-import { Shell } from './shell'
+import { Shell, SERVICE_IDS } from './shell'
 
 const PANEL_TITLE = 'PupChat'
 
@@ -24,15 +25,15 @@ if (!app.requestSingleInstanceLock(launch as unknown as Record<string, unknown>)
 
 async function start(): Promise<void> {
   const settingsFile = join(app.getPath('userData'), 'settings.json')
-  const settings = loadSettings(settingsFile)
-  const save = makeSaver(settingsFile)
+  const settings = loadSettings(settingsFile, SERVICE_IDS)
+  const save = makeSaver(settingsFile, SERVICE_IDS)
   const area = screen.getPrimaryDisplay().workArea
   const width = windowWidth(settings.panelWidth, settings.collapsed)
   const win = new BrowserWindow({
     title: PANEL_TITLE,
     width,
     height: area.height,
-    x: area.x + area.width - width,
+    x: settings.side === 'left' ? area.x : area.x + area.width - width,
     y: area.y,
     frame: false,
     transparent: true,
@@ -125,12 +126,13 @@ async function start(): Promise<void> {
       }
     }
     if (isHyprland()) {
-      placePanel(PANEL_TITLE, w)
+      placePanel(PANEL_TITLE, w, shell.current.side)
         .catch((e) => console.warn('[pupchat] place:', e))
         .finally(done)
     } else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
-      win.setBounds({ x: wa.x + wa.width - w, y: wa.y, width: w, height: wa.height })
+      const x = shell.current.side === 'left' ? wa.x : wa.x + wa.width - w
+      win.setBounds({ x, y: wa.y, width: w, height: wa.height })
       done()
     }
   }
@@ -157,10 +159,14 @@ async function start(): Promise<void> {
   const paw = createPaw(() => void p.toggleFromPaw())
   const placeTheWholeEdge = (): void => {
     const w = windowWidth(shell.panelWidth, shell.isCollapsed)
-    if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w, p.homeMonitor).catch(() => {})
+    const side = shell.current.side
+    if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w, p.homeMonitor, side).catch(() => {})
     else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
-      const x = p.isVisible ? wa.x + wa.width - w - 62 : wa.x + wa.width - 64
+      const x =
+        side === 'right'
+          ? p.isVisible ? wa.x + wa.width - w - 62 : wa.x + wa.width - 64
+          : p.isVisible ? wa.x + w + 6 : wa.x + 8
       paw.setPosition(x, Math.round(wa.y + wa.height * 0.45))
     }
   }
@@ -190,12 +196,35 @@ async function start(): Promise<void> {
   })
   paw.once('show', placeTheWholeEdge)
 
+  // Settings that act outside the shell.
+  p.onChange(() => shell.applyAudio()) // game mode: quiet while hidden
+  p.onOtherWindowFocused(() => {
+    if (shell.current.hideOnBlur && p.isVisible) void p.hide()
+  })
+  shell.onSettings((s, prev) => {
+    if (s.side !== prev.side) {
+      place()
+      placeTheWholeEdge()
+    }
+    if (s.launchAtLogin !== prev.launchAtLogin) {
+      try {
+        setLaunchAtLogin(s.launchAtLogin)
+      } catch (e) {
+        console.warn('[pupchat] launch at login:', e)
+      }
+    }
+  })
+
   const run = (cmd: CliCommand): void => {
     if (cmd.service) shell.select(cmd.service)
     if (cmd.action === 'toggle') void p.toggle()
     else if (cmd.action === 'show') void p.show()
     else if (cmd.action === 'hide') void p.hide()
     else if (cmd.action === 'quit') app.quit()
+    else if (cmd.action === 'settings') {
+      shell.setSettingsOpen(true)
+      void p.show()
+    }
   }
   app.on('second-instance', (_e, _argv, _cwd, data) => {
     if (isCliCommand(data)) run(data)

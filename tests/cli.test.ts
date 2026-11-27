@@ -10,8 +10,9 @@ describe('parseCli', () => {
     })
     expect(parseCli(['x'])).toEqual({ action: null, service: null })
   })
-  it('reads --quit', () => {
+  it('reads --quit and --settings', () => {
     expect(parseCli(['x', '--quit']).action).toBe('quit')
+    expect(parseCli(['x', '--settings']).action).toBe('settings')
   })
   it('last action wins', () => {
     expect(parseCli(['x', '--show', '--hide']).action).toBe('hide')

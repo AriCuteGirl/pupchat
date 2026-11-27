@@ -6,16 +6,31 @@ import { chromeUserAgent } from './userAgent'
 const UA = chromeUserAgent(process.versions.chrome, process.platform)
 
 /**
- * Allowed by default: notifications, and copying to the clipboard (sites use it for
- * "copy GIF/link"). Mic/camera/screen become opt-in per service later.
+ * Always allowed: notifications, and copying to the clipboard (sites use it for
+ * "copy GIF/link"). Microphone and camera only when you turned them on for this platform.
+ * Everything else (screen sharing, location, MIDI, ...) is denied.
  */
-const DEFAULT_ALLOWED = new Set(['notifications', 'clipboard-sanitized-write'])
+const ALWAYS_ALLOWED = new Set(['notifications', 'clipboard-sanitized-write'])
 
-function lockDownSession(id: string): Electron.Session {
+export interface ViewPolicy {
+  /** Read live, so changing the setting applies without reloading. */
+  allowMedia: () => boolean
+}
+
+function mediaOnlyMicCam(details: unknown): boolean {
+  const types = (details as { mediaTypes?: string[] } | undefined)?.mediaTypes ?? []
+  return types.every((t) => t === 'audio' || t === 'video')
+}
+
+function lockDownSession(id: string, policy: ViewPolicy): Electron.Session {
   const ses = session.fromPartition(partitionFor(id))
   ses.setUserAgent(UA)
-  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(DEFAULT_ALLOWED.has(permission)))
-  ses.setPermissionCheckHandler((_wc, permission) => DEFAULT_ALLOWED.has(permission))
+  const allowed = (permission: string, details?: unknown): boolean =>
+    ALWAYS_ALLOWED.has(permission) || (permission === 'media' && policy.allowMedia() && mediaOnlyMicCam(details))
+  ses.setPermissionRequestHandler((_wc, permission, cb, details) => cb(allowed(permission, details)))
+  ses.setPermissionCheckHandler((_wc, permission) =>
+    ALWAYS_ALLOWED.has(permission) || (permission === 'media' && policy.allowMedia())
+  )
   return ses
 }
 
@@ -23,10 +38,10 @@ function isBlankPopup(url: string): boolean {
   return url === '' || url === 'about:blank' || url === 'about://blank'
 }
 
-export function createServiceView(service: ServiceDef): WebContentsView {
+export function createServiceView(service: ServiceDef, policy: ViewPolicy): WebContentsView {
   const view = new WebContentsView({
     webPreferences: {
-      session: lockDownSession(service.id),
+      session: lockDownSession(service.id, policy),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,

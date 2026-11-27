@@ -63,8 +63,10 @@ interface Monitor {
 export interface EdgeGeometry {
   /** Panel rect, flush to the right edge below reserved areas (e.g. the Noctalia bar). */
   panel: { x: number; y: number; width: number; height: number }
-  /** Right edge of the usable area, and the vertical spot for the paw. */
+  /** Edges of the usable area, the docking side, and the vertical spot for the paw. */
+  left: number
   right: number
+  side: Side
   pawY: number
 }
 
@@ -74,7 +76,13 @@ const PAW = 56
  * The monitor PupChat belongs on: where the panel is open; otherwise the monitor of the
  * window you last clicked into (`homeMonitor`); otherwise Hyprland's focused monitor.
  */
-async function edgeGeometry(width: number, homeMonitor: number | null = null): Promise<EdgeGeometry | null> {
+export type Side = 'right' | 'left'
+
+async function edgeGeometry(
+  width: number,
+  homeMonitor: number | null = null,
+  side: Side = 'right'
+): Promise<EdgeGeometry | null> {
   const monitors = JSON.parse(await hyprctl(['-j', 'monitors'])) as Monitor[]
   const m =
     monitors.find((x) => x.specialWorkspace?.name === `special:${SPECIAL}`) ??
@@ -82,14 +90,17 @@ async function edgeGeometry(width: number, homeMonitor: number | null = null): P
     monitors.find((x) => x.focused) ??
     monitors[0]
   if (!m) return null
-  const [, top, rightRes, bottom] = m.reserved
+  const [leftRes, top, rightRes, bottom] = m.reserved
   const w = Math.round(m.width / m.scale)
   const h = Math.round(m.height / m.scale)
+  const left = m.x + leftRes
   const right = m.x + w - rightRes
   const height = h - top - bottom
   return {
-    panel: { x: right - width, y: m.y + top, width, height },
+    panel: { x: side === 'right' ? right - width : left, y: m.y + top, width, height },
+    left,
     right,
+    side,
     pawY: Math.round(m.y + top + height * 0.45)
   }
 }
@@ -99,8 +110,8 @@ function sel(title: string): string {
 }
 
 /** Re-applied on every open, so a drag never sticks. */
-export async function placePanel(title: string, width: number): Promise<void> {
-  const g = await edgeGeometry(width)
+export async function placePanel(title: string, width: number, side: Side = 'right'): Promise<void> {
+  const g = await edgeGeometry(width, null, side)
   if (!g) return
   const { x, y, width: w, height } = g.panel
   await hyprctl(['dispatch', `hl.dsp.window.resize({ x = ${w}, y = ${height}, relative = false, window = "${sel(title)}" })`])
@@ -115,11 +126,19 @@ export async function placePaw(
   title: string,
   panelOpen: boolean,
   panelWidth: number,
-  homeMonitor: number | null
+  homeMonitor: number | null,
+  side: Side = 'right'
 ): Promise<void> {
-  const g = await edgeGeometry(panelWidth, homeMonitor)
+  const g = await edgeGeometry(panelWidth, homeMonitor, side)
   if (!g) return
-  const x = panelOpen ? g.panel.x - PAW - 6 : g.right - PAW - 8
+  const x =
+    side === 'right'
+      ? panelOpen
+        ? g.panel.x - PAW - 6
+        : g.right - PAW - 8
+      : panelOpen
+        ? g.panel.x + g.panel.width + 6
+        : g.left + 8
   await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${g.pawY}, relative = false, window = "${sel(title)}" })`])
 }
 
@@ -154,7 +173,8 @@ export class HyprEvents {
   constructor(
     private readonly pid: number,
     onSpecial: (open: boolean) => void,
-    private readonly onMonitor: () => void = () => {}
+    private readonly onMonitor: () => void = () => {},
+    private readonly onOtherFocus: () => void = () => {}
   ) {
     const sig = process.env['HYPRLAND_INSTANCE_SIGNATURE']
     const runtime = process.env['XDG_RUNTIME_DIR']
@@ -202,6 +222,7 @@ export class HyprEvents {
     for (const c of clients) if (c.pid === this.pid) this.ours.add(c.address)
     if (this.ours.has(addr)) return
     this.lastOther = addr
+    this.onOtherFocus()
     // follow_mouse = 0: focus (and so this) changes when you click into a window, not on hover.
     const mon = clients.find((c) => c.address === addr)?.monitor ?? null
     if (mon !== null && mon !== this.homeMonitor) {

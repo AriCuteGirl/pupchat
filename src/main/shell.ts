@@ -2,10 +2,10 @@ import { ipcMain, type BrowserWindow, type WebContentsView } from 'electron'
 import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
+import { LIMITS, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
 import { createServiceView } from './serviceView'
-import { LIMITS, type Settings } from './settings'
 import { servicesToSleep } from './sleep'
 
 interface Slot {
@@ -21,14 +21,15 @@ interface Slot {
 /** Chromium net errors that mean "no connection", not "the site is broken". */
 const OFFLINE_CODES = new Set([-106, -105, -109, -118, -130, -137, -21])
 const OFFLINE_RETRY_MS = 15_000
+export const SERVICE_IDS = SERVICES.map((s) => s.id)
 
 /** Owns the service views inside the panel window and the state the shell UI renders. */
 export class Shell {
   private slots = new Map<string, Slot>()
   private active: string
+  private settingsOpen = false
   private listeners: Array<(s: ShellState) => void> = []
-  /** Minutes before an unused platform sleeps; 0 = never. Becomes a setting in step 5. */
-  sleepAfterMinutes = 0
+  private settingsListeners: Array<(s: Settings, prev: Settings) => void> = []
   isPanelVisible: () => boolean = () => true
 
   constructor(
@@ -46,11 +47,21 @@ export class Shell {
         lastUsed: 0,
         retryTimer: null
       })
-    this.active = SERVICES[0]!.id
+    this.active = this.listed()[0]!.def.id
     win.on('resize', () => this.layout())
     this.registerIpc()
     this.select(this.active)
     setInterval(() => this.tick(), 60_000).unref()
+  }
+
+  /** Enabled platforms in your order. */
+  private listed(): Slot[] {
+    return this.settings.order
+      .filter((id) => this.settings.services[id]?.enabled)
+      .flatMap((id) => {
+        const s = this.slots.get(id)
+        return s ? [s] : []
+      })
   }
 
   get isCollapsed(): boolean {
@@ -61,17 +72,30 @@ export class Shell {
     return this.settings.panelWidth
   }
 
+  get current(): Settings {
+    return this.settings
+  }
+
   activeView(): WebContentsView | null {
     return this.slots.get(this.active)?.view ?? null
+  }
+
+  activeId(): string {
+    return this.active
   }
 
   onState(fn: (s: ShellState) => void): void {
     this.listeners.push(fn)
   }
 
+  /** Called after settings change, with the previous values. */
+  onSettings(fn: (s: Settings, prev: Settings) => void): void {
+    this.settingsListeners.push(fn)
+  }
+
   state(): ShellState {
     return {
-      services: [...this.slots.values()].map((s) => ({
+      services: this.listed().map((s) => ({
         id: s.def.id,
         name: s.def.name,
         status: s.status,
@@ -81,7 +105,10 @@ export class Shell {
       active: this.active,
       collapsed: this.settings.collapsed,
       panelWidth: this.settings.panelWidth,
-      activeZoom: this.zoomOf(this.active)
+      activeZoom: this.zoomOf(this.active),
+      settings: structuredClone(this.settings),
+      settingsOpen: this.settingsOpen,
+      platform: process.platform
     }
   }
 
@@ -93,8 +120,9 @@ export class Shell {
 
   select(id: string): void {
     const slot = this.slots.get(id)
-    if (!slot) return
+    if (!slot || !this.settings.services[id]?.enabled) return
     this.active = id
+    this.settingsOpen = false
     slot.lastUsed = Date.now()
     if (!slot.view) this.load(slot) // lazy: loads the first time you open it, or wakes it up
     this.syncVisibility()
@@ -105,24 +133,47 @@ export class Shell {
 
   /** Ctrl+1..9: the n-th platform in the list. */
   selectIndex(n: number): void {
-    const id = [...this.slots.keys()][n]
-    if (id) this.select(id)
+    const s = this.listed()[n]
+    if (s) this.select(s.def.id)
   }
 
   setCollapsed(c: boolean): void {
-    if (c === this.settings.collapsed) return
-    this.settings.collapsed = c
-    this.save(this.settings)
-    this.layout()
-    this.emit()
+    this.updateSettings({ collapsed: c })
   }
 
   setPanelWidth(px: number): void {
-    const w = Math.round(Math.min(LIMITS.maxWidth, Math.max(LIMITS.minWidth, px)))
-    if (w === this.settings.panelWidth) return
-    this.settings.panelWidth = w
-    this.save(this.settings)
+    this.updateSettings({ panelWidth: Math.round(Math.min(LIMITS.maxWidth, Math.max(LIMITS.minWidth, px))) })
+  }
+
+  setSettingsOpen(open: boolean): void {
+    if (open === this.settingsOpen) return
+    this.settingsOpen = open
+    this.syncVisibility()
     this.emit()
+    if (!open) this.activeView()?.webContents.focus()
+  }
+
+  /** Validate, store and apply a settings change. */
+  updateSettings(patch: Partial<Settings>): void {
+    const prev = structuredClone(this.settings)
+    const next = validate({ ...this.settings, ...patch }, SERVICE_IDS)
+    if (JSON.stringify(next) === JSON.stringify(prev)) return
+    Object.assign(this.settings, next)
+    this.save(this.settings)
+
+    // Platforms switched off: close their pages properly; move away if it was the open one.
+    for (const id of SERVICE_IDS) {
+      const slot = this.slots.get(id)!
+      if (prev.services[id]?.enabled && !next.services[id]?.enabled) this.unload(slot, 'idle')
+    }
+    if (!next.services[this.active]?.enabled) {
+      const first = this.listed()[0]
+      if (first) this.select(first.def.id)
+    }
+    this.applyAudio()
+    this.layout()
+    this.emit()
+    for (const fn of this.settingsListeners) fn(this.settings, prev)
   }
 
   private zoomOf(id: string): number {
@@ -134,11 +185,11 @@ export class Shell {
     const id = this.active
     const z = step === 0 ? 1 : Math.round((this.zoomOf(id) + step * 0.1) * 10) / 10
     const next = Math.min(LIMITS.maxZoom, Math.max(LIMITS.minZoom, z))
-    if (next === 1) delete this.settings.zoom[id]
-    else this.settings.zoom[id] = next
-    this.save(this.settings)
+    const zoom = { ...this.settings.zoom }
+    if (next === 1) delete zoom[id]
+    else zoom[id] = next
+    this.updateSettings({ zoom })
     this.slots.get(id)?.view?.webContents.setZoomFactor(next)
-    this.emit()
   }
 
   /** Back to the platform's start page. Also used by "Try again". */
@@ -153,8 +204,16 @@ export class Shell {
     this.slots.get(id)?.view?.webContents.reload()
   }
 
+  /** Sounds: muted per platform, and all of them in game mode while the panel is hidden. */
+  applyAudio(): void {
+    const quiet = this.settings.gameMode && !this.isPanelVisible()
+    for (const s of this.slots.values())
+      s.view?.webContents.setAudioMuted(Boolean(this.settings.services[s.def.id]?.muted) || quiet)
+  }
+
   private syncVisibility(): void {
-    for (const s of this.slots.values()) s.view?.setVisible(s.def.id === this.active && s.status === 'ready')
+    for (const s of this.slots.values())
+      s.view?.setVisible(!this.settingsOpen && s.def.id === this.active && s.status === 'ready')
   }
 
   private setStatus(slot: Slot, status: ServiceStatus): void {
@@ -182,7 +241,8 @@ export class Shell {
   }
 
   private load(slot: Slot): void {
-    const view = createServiceView(slot.def)
+    const id = slot.def.id
+    const view = createServiceView(slot.def, { allowMedia: () => Boolean(this.settings.services[id]?.media) })
     slot.view = view
     view.setBorderRadius(LAYOUT.viewRadius)
     view.setVisible(false)
@@ -190,11 +250,12 @@ export class Shell {
     this.win.contentView.addChildView(view)
     const wc = view.webContents
     slot.status = 'loading'
+    this.applyAudio()
     wc.on('did-start-loading', () => {
       if (slot.status !== 'ready') this.setStatus(slot, 'loading')
     })
     wc.on('did-finish-load', () => {
-      wc.setZoomFactor(this.zoomOf(slot.def.id))
+      wc.setZoomFactor(this.zoomOf(id))
       this.setStatus(slot, 'ready')
     })
     wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
@@ -218,18 +279,19 @@ export class Shell {
     })
   }
 
-  /** Close the page to free RAM; it comes back when you open the platform again. */
-  private sleep(slot: Slot): void {
-    if (!slot.view) return
+  /** Close the page properly (keeps logins) and forget its view. */
+  private unload(slot: Slot, status: ServiceStatus): void {
     if (slot.retryTimer) clearTimeout(slot.retryTimer)
-    const view = slot.view
-    this.win.contentView.removeChildView(view)
-    void closePageGracefully(view.webContents)
+    slot.retryTimer = null
+    if (slot.view) {
+      const view = slot.view
+      this.win.contentView.removeChildView(view)
+      void closePageGracefully(view.webContents)
+    }
     slot.view = null
     slot.unread = 0
     slot.needsLogin = false
-    slot.status = 'asleep'
-    this.emit()
+    slot.status = status
   }
 
   private tick(): void {
@@ -240,9 +302,10 @@ export class Shell {
       [...this.slots.values()].map((s) => ({ id: s.def.id, awake: s.view !== null, lastUsed: s.lastUsed })),
       this.active,
       now,
-      this.sleepAfterMinutes
+      this.settings.sleepAfterMinutes
     )
-    for (const id of ids) this.sleep(this.slots.get(id)!)
+    for (const id of ids) this.unload(this.slots.get(id)!, 'asleep')
+    if (ids.length) this.emit()
   }
 
   /** Close every platform page properly (see closePageGracefully). Used before quitting. */
@@ -283,6 +346,14 @@ export class Shell {
     })
     ipcMain.on(CH.resetZoom, (e) => {
       if (fromShell(e)) this.zoomActive(0)
+    })
+    ipcMain.on(CH.updateSettings, (e, patch: unknown) => {
+      // validate() inside updateSettings drops anything unknown or out of range.
+      if (fromShell(e) && typeof patch === 'object' && patch !== null && !Array.isArray(patch))
+        this.updateSettings(patch as Partial<Settings>)
+    })
+    ipcMain.on(CH.setSettingsOpen, (e, open: unknown) => {
+      if (fromShell(e) && typeof open === 'boolean') this.setSettingsOpen(open)
     })
   }
 }

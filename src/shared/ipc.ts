@@ -1,3 +1,5 @@
+import type { Settings } from './settings'
+
 /** Everything the shell UI may know. No message content, ever. */
 export type ServiceStatus = 'idle' | 'loading' | 'ready' | 'error' | 'offline' | 'asleep'
 
@@ -12,6 +14,7 @@ export interface ServiceState {
 }
 
 export interface ShellState {
+  /** Enabled platforms, in list order. */
   services: ServiceState[]
   active: string
   collapsed: boolean
@@ -19,6 +22,10 @@ export interface ShellState {
   panelWidth: number
   /** Zoom of the active platform (1 = 100 %). */
   activeZoom: number
+  settings: Settings
+  settingsOpen: boolean
+  /** process.platform of the main process ("linux", "win32", ...). */
+  platform: string
 }
 
 /** The only channels the shell may use. */
@@ -32,6 +39,8 @@ export const CH = {
   resetZoom: 'pupchat:reset-zoom',
   home: 'pupchat:home',
   reload: 'pupchat:reload',
+  updateSettings: 'pupchat:update-settings',
+  setSettingsOpen: 'pupchat:set-settings-open',
   pawUnread: 'pupchat:paw-unread'
 } as const
 
@@ -46,4 +55,7 @@ export interface ShellApi {
   /** Back to the platform's start page (way out of a stuck or wrong page). */
   home(id: string): void
   reload(id: string): void
+  /** Partial settings; main validates and applies them. */
+  updateSettings(patch: Partial<Settings>): void
+  setSettingsOpen(open: boolean): void
 }

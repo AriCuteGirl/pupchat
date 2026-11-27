@@ -11,6 +11,7 @@ export class Panel {
   private visible = false
   private listeners: Array<(v: boolean) => void> = []
   private monitorListeners: Array<() => void> = []
+  private otherFocusListeners: Array<() => void> = []
   private events: HyprEvents | null = null
 
   constructor(
@@ -24,7 +25,8 @@ export class Panel {
           this.setVisible(open)
           if (open) void focusPanel(win.getTitle()).catch(() => {})
         },
-        () => this.monitorListeners.forEach((fn) => fn())
+        () => this.monitorListeners.forEach((fn) => fn()),
+        () => this.otherFocusListeners.forEach((fn) => fn())
       )
       void isSpecialOpen().then((o) => this.setVisible(o), () => {})
     } else {
@@ -39,6 +41,12 @@ export class Panel {
 
   onChange(fn: (v: boolean) => void): void {
     this.listeners.push(fn)
+  }
+
+  /** You focused a window that isn't PupChat (click into it, Alt+Tab, ...). */
+  onOtherWindowFocused(fn: () => void): void {
+    this.otherFocusListeners.push(fn)
+    if (this.mode === 'window') this.win.on('blur', () => fn())
   }
 
   /** Monitor of the window you last clicked into (Hyprland only). */
