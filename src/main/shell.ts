@@ -1,7 +1,9 @@
-import { ipcMain, type BrowserWindow, type WebContentsView } from 'electron'
+import { ipcMain, Menu, type BrowserWindow, type WebContentsView } from 'electron'
 import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
-import { SERVICES, type ServiceDef } from '../shared/services'
+import { isChatUrl, SERVICES, type ServiceDef } from '../shared/services'
+import { CATEGORY_COLORS, type Pins } from '../shared/pins'
+import { addCategory, addPin, goToChat, grabAvatar, loadPins, moveWithin, nameFromTitle, savePins } from './pins'
 import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
 import { unreadFor, unreadGrowth, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
@@ -13,6 +15,10 @@ import { createServiceView } from './serviceView'
 import { servicesToSleep } from './sleep'
 
 interface Slot {
+  /** The page's current address (for pinning the open chat). */
+  url: string
+  /** The page's current title (only used to prefill a pin's name). */
+  title: string
   /** insertCSS key of the iMessage look, when applied to the current page. */
   skinKey: string | null
   /** insertCSS key of the chat glass strength, and the value it was made for. */
@@ -58,6 +64,7 @@ export class Shell {
   private active: string
   private settingsOpen = false
   private hotkeyProblem = false
+  private pins: Pins = loadPins()
   /** Bumped on every theme import, so pages re-apply the new CSS. */
   private themeVersion = 0
   private themeText: string | null = loadThemeCss()
@@ -80,6 +87,8 @@ export class Shell {
         needsLogin: false,
         lastUsed: 0,
         retryTimer: null,
+        url: '',
+        title: '',
         skinKey: null,
         glassKey: null,
         glassFor: -1,
@@ -166,6 +175,8 @@ export class Shell {
       settingsOpen: this.settingsOpen,
       platform: process.platform,
       hotkeyProblem: this.hotkeyProblem,
+      pins: this.pins,
+      current: this.currentChat(),
       discordTheme: themeInfo()
     }
   }
@@ -275,6 +286,158 @@ export class Shell {
     const quiet = this.settings.gameMode && !this.isPanelVisible()
     for (const s of this.slots.values())
       s.view?.webContents.setAudioMuted(Boolean(this.settings.services[s.def.id]?.muted) || quiet)
+  }
+
+  // ---- Pinned chats ---------------------------------------------------------------
+
+  private currentChat(): { pinnable: boolean; pinnedId: string | null } {
+    const slot = this.slots.get(this.active)
+    const url = slot?.url ?? ''
+    const pinnable = Boolean(slot && isChatUrl(slot.def.id, url))
+    const pinned = this.pins.items.find((p) => p.service === this.active && p.url === url)
+    return { pinnable, pinnedId: pinned?.id ?? null }
+  }
+
+  private savePinsAndEmit(): void {
+    savePins(this.pins)
+    this.emit()
+  }
+
+  /** Pin the open chat; if it's already pinned, unpin it. */
+  async pinCurrent(): Promise<void> {
+    const slot = this.slots.get(this.active)
+    const wc = slot?.view?.webContents
+    if (!slot || !wc || !isChatUrl(slot.def.id, slot.url)) return
+    const existing = this.pins.items.find((p) => p.service === slot.def.id && p.url === slot.url)
+    if (existing) return this.unpin(existing.id)
+    const url = slot.url
+    const avatar = await grabAvatar(wc)
+    addPin(this.pins, {
+      service: slot.def.id,
+      url,
+      name: nameFromTitle(slot.title, slot.def.name) || slot.def.name,
+      avatar,
+      category: ''
+    })
+    this.savePinsAndEmit()
+  }
+
+  unpin(id: string): void {
+    this.pins.items = this.pins.items.filter((p) => p.id !== id)
+    this.savePinsAndEmit()
+  }
+
+  async openPin(id: string): Promise<void> {
+    const pin = this.pins.items.find((p) => p.id === id)
+    if (!pin) return
+    this.select(pin.service)
+    const slot = this.slots.get(pin.service)
+    // Wait for a freshly opened platform to load before jumping.
+    for (let i = 0; i < 40 && slot && slot.status !== 'ready'; i++) await new Promise((r) => setTimeout(r, 250))
+    const wc = slot?.view?.webContents
+    if (wc && slot.url !== pin.url) await goToChat(wc, pin.url)
+    wc?.focus()
+  }
+
+  renamePin(id: string, name: string): void {
+    const pin = this.pins.items.find((p) => p.id === id)
+    const clean = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 64)
+    if (pin && clean) {
+      pin.name = clean
+      this.savePinsAndEmit()
+    }
+  }
+
+  renameCategory(id: string, name: string): void {
+    const c = this.pins.categories.find((x) => x.id === id)
+    const clean = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40)
+    if (c && clean) {
+      c.name = clean
+      this.savePinsAndEmit()
+    }
+  }
+
+  toggleCategory(id: string): void {
+    const c = this.pins.categories.find((x) => x.id === id)
+    if (c) {
+      c.collapsed = !c.collapsed
+      this.savePinsAndEmit()
+    }
+  }
+
+  private startRename(kind: 'pin' | 'category', id: string): void {
+    this.win.webContents.send(CH.startRename, { kind, id })
+  }
+
+  private newCategoryFor(service: string, pinId?: string): void {
+    const c = addCategory(this.pins, service)
+    const pin = pinId ? this.pins.items.find((p) => p.id === pinId) : undefined
+    if (pin) pin.category = c.id
+    this.savePinsAndEmit()
+    this.startRename('category', c.id)
+  }
+
+  /** Right-click on a pinned chat. */
+  pinMenu(id: string): void {
+    const pin = this.pins.items.find((p) => p.id === id)
+    if (!pin) return
+    const cats = this.pins.categories.filter((c) => c.service === pin.service)
+    const sameGroup = (a: { service: string; category: string }, b: { service: string; category: string }): boolean =>
+      a.service === b.service && a.category === b.category
+    Menu.buildFromTemplate([
+      { label: 'Open', click: () => void this.openPin(id) },
+      { label: 'Rename…', click: () => this.startRename('pin', id) },
+      {
+        label: 'Move to',
+        submenu: [
+          { label: 'Pinned (no category)', type: 'radio', checked: pin.category === '', click: () => ((pin.category = ''), this.savePinsAndEmit()) },
+          ...cats.map((c) => ({
+            label: c.name,
+            type: 'radio' as const,
+            checked: pin.category === c.id,
+            click: () => ((pin.category = c.id), this.savePinsAndEmit())
+          })),
+          { type: 'separator' as const },
+          { label: 'New category…', click: () => this.newCategoryFor(pin.service, id) }
+        ]
+      },
+      { label: 'Move up', click: () => (moveWithin(this.pins.items, id, -1, sameGroup), this.savePinsAndEmit()) },
+      { label: 'Move down', click: () => (moveWithin(this.pins.items, id, 1, sameGroup), this.savePinsAndEmit()) },
+      { type: 'separator' },
+      { label: 'Unpin', click: () => this.unpin(id) }
+    ]).popup({ window: this.win })
+  }
+
+  /** Right-click on a category header. */
+  categoryMenu(id: string): void {
+    const c = this.pins.categories.find((x) => x.id === id)
+    if (!c) return
+    const sameService = (a: { service: string }, b: { service: string }): boolean => a.service === b.service
+    Menu.buildFromTemplate([
+      { label: 'Rename…', click: () => this.startRename('category', id) },
+      {
+        label: 'Color',
+        submenu: CATEGORY_COLORS.map((col) => ({
+          label: col.name,
+          type: 'radio' as const,
+          checked: c.color === col.color,
+          click: () => ((c.color = col.color), this.savePinsAndEmit())
+        }))
+      },
+      { label: c.collapsed ? 'Expand' : 'Collapse', click: () => this.toggleCategory(id) },
+      { label: 'Move up', click: () => (moveWithin(this.pins.categories, id, -1, sameService), this.savePinsAndEmit()) },
+      { label: 'Move down', click: () => (moveWithin(this.pins.categories, id, 1, sameService), this.savePinsAndEmit()) },
+      { type: 'separator' },
+      { label: 'New category…', click: () => this.newCategoryFor(c.service) },
+      {
+        label: 'Delete category',
+        click: () => {
+          for (const p of this.pins.items) if (p.category === id) p.category = ''
+          this.pins.categories = this.pins.categories.filter((x) => x.id !== id)
+          this.savePinsAndEmit()
+        }
+      }
+    ]).popup({ window: this.win })
   }
 
   /** Import the Equicord themes for Discord and apply them. */
@@ -406,12 +569,18 @@ export class Shell {
     })
     // A crashed page is reloaded by the view; show the loading pup meanwhile, not a blank area.
     wc.on('render-process-gone', () => this.setStatus(slot, 'loading'))
-    wc.on('did-navigate', (_e, url) => this.checkLogin(slot, url))
+    const onUrl = (url: string): void => {
+      slot.url = url
+      this.checkLogin(slot, url)
+      if (slot.def.id === this.active) this.emit() // the pin button follows the open chat
+    }
+    wc.on('did-navigate', (_e, url) => onUrl(url))
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-      if (isMainFrame) this.checkLogin(slot, url)
+      if (isMainFrame) onUrl(url)
     })
     // Badges come from the title only; the title is not kept.
     wc.on('page-title-updated', (_e, title) => {
+      slot.title = title
       const u = unreadFor(title, slot.def.ignoreDot)
       if (u !== slot.unread) {
         const added = unreadGrowth(slot.unread, u)
@@ -499,6 +668,15 @@ export class Shell {
       if (fromShell(e) && typeof patch === 'object' && patch !== null && !Array.isArray(patch))
         this.updateSettings(patch as Partial<Settings>)
     })
+    const str = (v: unknown): v is string => typeof v === 'string' && v.length < 200
+    ipcMain.on(CH.pinCurrent, (e) => fromShell(e) && void this.pinCurrent())
+    ipcMain.on(CH.unpin, (e, id: unknown) => fromShell(e) && str(id) && this.unpin(id))
+    ipcMain.on(CH.openPin, (e, id: unknown) => fromShell(e) && str(id) && void this.openPin(id))
+    ipcMain.on(CH.renamePin, (e, id: unknown, name: unknown) => fromShell(e) && str(id) && str(name) && this.renamePin(id, name))
+    ipcMain.on(CH.renameCategory, (e, id: unknown, name: unknown) => fromShell(e) && str(id) && str(name) && this.renameCategory(id, name))
+    ipcMain.on(CH.toggleCategory, (e, id: unknown) => fromShell(e) && str(id) && this.toggleCategory(id))
+    ipcMain.on(CH.pinMenu, (e, id: unknown) => fromShell(e) && str(id) && this.pinMenu(id))
+    ipcMain.on(CH.categoryMenu, (e, id: unknown) => fromShell(e) && str(id) && this.categoryMenu(id))
     ipcMain.handle(CH.importDiscordTheme, (e) =>
       fromShell(e) ? this.importDiscordTheme() : { ok: false, error: 'not allowed' }
     )

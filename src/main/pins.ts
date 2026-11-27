@@ -1,0 +1,93 @@
+import { app, nativeImage, type WebContents } from 'electron'
+import { readFileSync, renameSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { newId, validatePins, type Pin, type PinCategory, type Pins, CATEGORY_COLORS } from '../shared/pins'
+export { moveWithin, nameFromTitle } from '../shared/pins'
+import { isChatUrl } from '../shared/services'
+
+const file = (): string => join(app.getPath('userData'), 'pins.json')
+
+export function loadPins(): Pins {
+  try {
+    return validatePins(JSON.parse(readFileSync(file(), 'utf8')), isChatUrl)
+  } catch {
+    return { categories: [], items: [] }
+  }
+}
+
+export function savePins(p: Pins): void {
+  mkdirSync(app.getPath('userData'), { recursive: true })
+  const tmp = file() + '.tmp'
+  writeFileSync(tmp, JSON.stringify(validatePins(p, isChatUrl), null, 1), { mode: 0o600 })
+  renameSync(tmp, file())
+}
+
+/**
+ * The open chat's avatar: the small square picture at the top of the chat area. Only that
+ * one image address is read, once, when you pin. Runs in the page; returns '' if none.
+ */
+const FIND_HEADER_AVATAR = `(() => {
+  const w = innerWidth
+  const imgs = [...document.querySelectorAll('img')].filter((i) => {
+    const r = i.getBoundingClientRect()
+    const src = i.currentSrc || i.src
+    return r.width >= 18 && r.width <= 72 && Math.abs(r.width - r.height) < 4 && r.top >= 0 && r.top < 150 &&
+      r.left > w * 0.2 && /^https:/.test(src)
+  })
+  imgs.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || b.getBoundingClientRect().left - a.getBoundingClientRect().left)
+  const i = imgs[0]
+  return i ? (i.currentSrc || i.src) : ''
+})()`
+
+/** Grab and shrink the avatar to a 64 px PNG data URL (with the platform's own cookies). */
+export async function grabAvatar(wc: WebContents): Promise<string> {
+  try {
+    const src = (await wc.executeJavaScript(FIND_HEADER_AVATAR)) as unknown
+    if (typeof src !== 'string' || !/^https:\/\//.test(src) || src.length > 2000) return ''
+    const res = await wc.session.fetch(src)
+    if (!res.ok) return ''
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.length > 3_000_000) return ''
+    const img = nativeImage.createFromBuffer(buf)
+    if (img.isEmpty()) return ''
+    return img.resize({ width: 64, height: 64, quality: 'good' }).toDataURL()
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Jump to a chat inside the already-open page, the way a link inside the site would
+ * (history.pushState + popstate; hash change for Telegram). Falls back to loading the address.
+ */
+export async function goToChat(wc: WebContents, url: string): Promise<void> {
+  const script = `(() => {
+    const u = new URL(${JSON.stringify(url)})
+    if (u.origin !== location.origin) return false
+    if (u.hash && u.pathname === location.pathname && u.search === location.search) { location.hash = u.hash; return true }
+    history.pushState(history.state, '', u.pathname + u.search + u.hash)
+    dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
+    return true
+  })()`
+  const target = new URL(url)
+  const ok = await wc.executeJavaScript(script).catch(() => false)
+  await new Promise((r) => setTimeout(r, 900))
+  const now = new URL(wc.getURL())
+  const arrived = now.pathname.replace(/\/$/, '') === target.pathname.replace(/\/$/, '') && now.hash === target.hash
+  if (!ok || !arrived) await wc.loadURL(url).catch(() => {})
+}
+
+export function addCategory(p: Pins, service: string, name = 'New category'): PinCategory {
+  const used = new Set(p.categories.filter((c) => c.service === service).map((c) => c.color))
+  const color = CATEGORY_COLORS.find((c) => !used.has(c.color))?.color ?? CATEGORY_COLORS[0].color
+  const c: PinCategory = { id: newId(), service, name, color, collapsed: false }
+  p.categories.push(c)
+  return c
+}
+
+export function addPin(p: Pins, pin: Omit<Pin, 'id'>): Pin {
+  const item: Pin = { ...pin, id: newId() }
+  p.items.push(item)
+  return item
+}
+

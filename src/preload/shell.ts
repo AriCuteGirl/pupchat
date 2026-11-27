@@ -19,6 +19,17 @@ const api: ShellApi = {
   setSettingsOpen: (open) => ipcRenderer.send(CH.setSettingsOpen, open),
   importDiscordTheme: () => ipcRenderer.invoke(CH.importDiscordTheme) as Promise<ImportResult>,
   chooseSound: () => ipcRenderer.send(CH.chooseSound),
-  previewSound: () => ipcRenderer.send(CH.previewSound)
+  previewSound: () => ipcRenderer.send(CH.previewSound),
+  pinCurrent: () => ipcRenderer.send(CH.pinCurrent),
+  unpin: (id) => ipcRenderer.send(CH.unpin, id),
+  openPin: (id) => ipcRenderer.send(CH.openPin, id),
+  renamePin: (id, name) => ipcRenderer.send(CH.renamePin, id, name),
+  renameCategory: (id, name) => ipcRenderer.send(CH.renameCategory, id, name),
+  toggleCategory: (id) => ipcRenderer.send(CH.toggleCategory, id),
+  pinMenu: (id) => ipcRenderer.send(CH.pinMenu, id),
+  categoryMenu: (id) => ipcRenderer.send(CH.categoryMenu, id),
+  onStartRename: (fn) => {
+    ipcRenderer.on(CH.startRename, (_e: IpcRendererEvent, r: { kind: 'pin' | 'category'; id: string }) => fn(r))
+  }
 }
 contextBridge.exposeInMainWorld('pupchat', api)

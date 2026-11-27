@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Bone, House, PanelLeftClose, PanelLeftOpen, PawPrint, RotateCw, Settings as Gear } from '@lucide/svelte'
+  import { Bone, House, PanelLeftClose, PanelLeftOpen, PawPrint, Pin, PinOff, RotateCw, Settings as Gear } from '@lucide/svelte'
+  import PinList from './lib/PinList.svelte'
   import Settings from './Settings.svelte'
   import type { ServiceState, ShellApi, ShellState } from '../../shared/ipc'
   import { LAYOUT, sidebarWidth } from '../../shared/layout'
@@ -152,6 +153,7 @@
           </button>
         {/each}
       </nav>
+      <PinList {shell} {api} {collapsed} />
       <div class="foot">
         <button
           class="icon-btn"
@@ -189,6 +191,17 @@
         {#if active?.needsLogin}<span class="hint">Log in below to start chatting</span>{/if}
         {#if active && !shell.settingsOpen && active.status !== 'idle' && active.status !== 'asleep'}
           <div class="tools">
+            {#if shell.current.pinnable}
+              <button
+                class="icon-btn"
+                class:pinned={shell.current.pinnedId !== null}
+                aria-label={shell.current.pinnedId ? 'Unpin this chat' : 'Pin this chat'}
+                title={shell.current.pinnedId ? 'Unpin this chat' : 'Pin this chat'}
+                onclick={() => api.pinCurrent()}
+              >
+                {#if shell.current.pinnedId}<PinOff size={16} />{:else}<Pin size={16} />{/if}
+              </button>
+            {/if}
             <button class="icon-btn" aria-label="Back to {active.name} start page" title="Start page" onclick={() => api.home(active.id)}>
               <House size={17} />
             </button>
@@ -511,6 +524,9 @@
   }
   .tools .icon-btn:hover {
     color: var(--c-text);
+  }
+  .tools .icon-btn.pinned {
+    color: var(--c-collar);
   }
   .hint {
     font-size: var(--fs-caption);

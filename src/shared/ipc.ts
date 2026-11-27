@@ -1,3 +1,4 @@
+import type { Pins } from './pins'
 import type { Settings } from './settings'
 
 /** Everything the shell UI may know. No message content, ever. */
@@ -28,6 +29,10 @@ export interface ShellState {
   platform: string
   /** The Windows/X11 global shortcut is taken by another app. */
   hotkeyProblem: boolean
+  /** Pinned chats and categories (all platforms). */
+  pins: Pins
+  /** The open chat on the active platform: can it be pinned, is it pinned? */
+  current: { pinnable: boolean; pinnedId: string | null }
   /** The imported Discord theme, if any. */
   discordTheme: { source: string; importedAt: string; bytes: number } | null
 }
@@ -49,6 +54,15 @@ export const CH = {
   setSettingsOpen: 'pupchat:set-settings-open',
   importDiscordTheme: 'pupchat:import-discord-theme',
   chooseSound: 'pupchat:choose-sound',
+  pinCurrent: 'pupchat:pin-current',
+  unpin: 'pupchat:unpin',
+  openPin: 'pupchat:open-pin',
+  renamePin: 'pupchat:rename-pin',
+  renameCategory: 'pupchat:rename-category',
+  toggleCategory: 'pupchat:toggle-category',
+  pinMenu: 'pupchat:pin-menu',
+  categoryMenu: 'pupchat:category-menu',
+  startRename: 'pupchat:start-rename',
   previewSound: 'pupchat:preview-sound',
   pawUnread: 'pupchat:paw-unread'
 } as const
@@ -73,4 +87,16 @@ export interface ShellApi {
   chooseSound(): void
   /** Play the banner sound once. */
   previewSound(): void
+  /** Pin the open chat (or unpin it if it's pinned). */
+  pinCurrent(): void
+  unpin(id: string): void
+  openPin(id: string): void
+  renamePin(id: string, name: string): void
+  renameCategory(id: string, name: string): void
+  toggleCategory(id: string): void
+  /** Right-click menus (native). */
+  pinMenu(id: string): void
+  categoryMenu(id: string): void
+  /** Main asks the UI to start inline renaming (after "Rename…" in a menu). */
+  onStartRename(fn: (r: { kind: 'pin' | 'category'; id: string }) => void): void
 }
