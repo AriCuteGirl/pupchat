@@ -12,9 +12,10 @@
   let { shell, api }: { shell: ShellState; api: ShellApi } = $props()
   const s = $derived(shell.settings)
 
-  const update = (patch: Partial<Settings>): void => api.updateSettings(patch)
+  // Svelte state is a proxy that can't be cloned or sent over IPC: send a plain snapshot.
+  const update = (patch: Partial<Settings>): void => api.updateSettings($state.snapshot(patch) as Partial<Settings>)
   function setPref(id: string, patch: Partial<ServicePrefs>): void {
-    const services = structuredClone(s.services)
+    const services = $state.snapshot(s.services) as Settings['services']
     services[id] = { ...services[id]!, ...patch }
     update({ services })
   }
