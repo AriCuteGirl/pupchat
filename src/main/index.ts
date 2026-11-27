@@ -6,9 +6,11 @@ import { CH } from '../shared/ipc'
 import { windowWidth } from '../shared/layout'
 import { totalUnread } from './badge'
 import { isCliCommand, parseCli, type CliCommand } from './cli'
-import { isHyprland, placeBanner, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
+import { isHyprland, placeBanner, placePanel, placePaw, pupMonitorName, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
 import { createPaw, PAW_TITLE } from './paw'
+import { OverlayPaw, overlayPawAvailable } from './overlayPaw'
+import { resourcePath } from './tray'
 import { setLaunchAtLogin } from './autostart'
 import { BANNER_SIZE, BANNER_TITLE, Banners, safeIcon } from './banners'
 import { loadSettings, makeSaver } from './settings'
@@ -26,6 +28,11 @@ if (!app.requestSingleInstanceLock(launch as unknown as Record<string, unknown>)
   app.quit()
 } else {
   void app.whenReady().then(start)
+}
+
+/** Files Quickshell must read from disk: outside app.asar when packaged. */
+function unpacked(p: string): string {
+  return p.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
 }
 
 async function start(): Promise<void> {
@@ -164,10 +171,33 @@ async function start(): Promise<void> {
 
   // The paw stays visible: on the screen edge when closed, beside the panel when open,
   // so one click opens and the next click slides the panel away again.
-  const paw = createPaw(() => void p.toggleFromPaw())
+  // On Hyprland with Quickshell the paw is an overlay layer, visible even over fullscreen
+  // games; otherwise (or if Quickshell stops) PupChat's own paw window.
+  let overlay: OverlayPaw | null = overlayPawAvailable()
+    ? new OverlayPaw(unpacked(resourcePath('quickshell', 'paw')), () => {
+        overlay = null
+        paw.showInactive()
+        placeTheWholeEdge()
+      })
+    : null
+  const paw = createPaw(() => void p.toggleFromPaw(), overlay === null)
+  const unreadTotal = (): number => totalUnread(shell.state().services.map((x) => x.unread))
+  const overlayState = async (): Promise<import('./overlayPaw').OverlayPawState> => ({
+    monitor: await pupMonitorName(p.homeMonitor).catch(() => ''),
+    unread: unreadTotal(),
+    open: p.isVisible,
+    side: shell.current.side,
+    panelWidth: windowWidth(shell.panelWidth, shell.isCollapsed),
+    top: 0.45,
+    icon: unpacked(resourcePath('tray', 'paw.svg'))
+  })
   const placeTheWholeEdge = (): void => {
     const w = windowWidth(shell.panelWidth, shell.isCollapsed)
     const side = shell.current.side
+    if (overlay) {
+      void overlayState().then((st) => overlay?.write(st))
+      return
+    }
     if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w, p.homeMonitor, side).catch(() => {})
     else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
@@ -191,7 +221,10 @@ async function start(): Promise<void> {
       placeTheWholeEdge()
     }
     sendPawUnread(totalUnread(st.services.map((x) => x.unread)))
+    if (overlay) placeTheWholeEdge() // unread count changed, maybe
   })
+  if (overlay) void overlayState().then((st) => overlay?.start(st))
+  app.on('will-quit', () => overlay?.stop())
   let lastTotal = -1
   const sendPawUnread = (n: number): void => {
     if (n === lastTotal || paw.isDestroyed()) return

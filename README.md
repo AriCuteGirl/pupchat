@@ -93,8 +93,9 @@ hl.window_rule({ match = { class = "^(pupchat)$", title = "^(PupChat Banner)$" }
 Without these rules PupChat still works as a normal window (`pupchat --toggle`).
 
 **Good to know**
-- The panel opens over fullscreen games. The paw and banners show over borderless or windowed
-  games; a true fullscreen window covers them.
+- The panel opens over fullscreen games. With [Quickshell](https://quickshell.org) installed, the
+  paw is a Wayland overlay layer and stays visible over fullscreen games too (PupChat starts it
+  itself, no config needed). Banners show over borderless or windowed games.
 - The glass blur comes from Hyprland's `decoration:blur`. Turn the glass up in Settings if your
   blur is off.
 

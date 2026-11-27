@@ -9,9 +9,14 @@ files:
   - out/**
   - resources/fonts/**
   - resources/tray/**
+  - resources/quickshell/**
   - package.json
   - "!**/*.map"
 asar: true
+# Quickshell reads the overlay paw's QML (and its icon) straight from disk.
+asarUnpack:
+  - resources/quickshell/**
+  - resources/tray/paw.svg
 
 linux:
   target:

@@ -118,6 +118,17 @@ export async function placePanel(title: string, width: number, side: Side = 'rig
   await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = false, window = "${sel(title)}" })`])
 }
 
+/** Name of the monitor PupChat belongs on (see edgeGeometry), e.g. "DP-2". */
+export async function pupMonitorName(homeMonitor: number | null): Promise<string> {
+  const monitors = JSON.parse(await hyprctl(['-j', 'monitors'])) as Array<Monitor & { name: string }>
+  const m =
+    monitors.find((x) => x.specialWorkspace?.name === `special:${SPECIAL}`) ??
+    monitors.find((x) => x.id === homeMonitor) ??
+    monitors.find((x) => x.focused) ??
+    monitors[0]
+  return m?.name ?? ''
+}
+
 /** Banner: top center of the paw's monitor, just below reserved areas (the bar). */
 export async function placeBanner(
   title: string,

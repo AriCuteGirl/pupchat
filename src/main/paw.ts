@@ -5,7 +5,7 @@ export const PAW_TITLE = 'PupChat Paw'
 const SIZE = 56
 
 /** The little glass paw on the screen edge. Never takes focus; a click toggles the panel. */
-export function createPaw(onToggle: () => void): BrowserWindow {
+export function createPaw(onToggle: () => void, showAtStart = true): BrowserWindow {
   const area = screen.getPrimaryDisplay().workArea
   const paw = new BrowserWindow({
     title: PAW_TITLE,
@@ -39,6 +39,6 @@ export function createPaw(onToggle: () => void): BrowserWindow {
   if (process.env['ELECTRON_RENDERER_URL'])
     void paw.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/paw.html`)
   else void paw.loadFile(join(import.meta.dirname, '../renderer/paw.html'))
-  paw.once('ready-to-show', () => paw.showInactive())
+  if (showAtStart) paw.once('ready-to-show', () => paw.showInactive())
   return paw
 }
