@@ -1,12 +1,12 @@
 /** What a launch of `pupchat ...` asks the running instance to do. */
-export type PanelAction = 'toggle' | 'show' | 'hide'
+export type PanelAction = 'toggle' | 'show' | 'hide' | 'quit'
 
 export interface CliCommand {
   action: PanelAction | null
   service: string | null
 }
 
-const ACTIONS: readonly PanelAction[] = ['toggle', 'show', 'hide']
+const ACTIONS: readonly PanelAction[] = ['toggle', 'show', 'hide', 'quit']
 const SERVICE_ID = /^[a-z0-9-]{1,32}$/
 
 /**

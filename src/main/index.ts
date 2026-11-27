@@ -191,11 +191,23 @@ async function start(): Promise<void> {
     if (cmd.action === 'toggle') void p.toggle()
     else if (cmd.action === 'show') void p.show()
     else if (cmd.action === 'hide') void p.hide()
+    else if (cmd.action === 'quit') app.quit()
   }
   app.on('second-instance', (_e, _argv, _cwd, data) => {
     if (isCliCommand(data)) run(data)
   })
   run(launch.action ? launch : { action: 'show', service: null })
+
+  // Quit properly: let every platform page close itself first (keeps Discord logged in).
+  let closing = false
+  app.on('before-quit', (e) => {
+    if (closing) return
+    closing = true
+    e.preventDefault()
+    void shell.closeAll().finally(() => app.quit())
+  })
+  // kill, logout and reboot send these: take the same careful path.
+  for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const) process.on(sig, () => app.quit())
 }
 
 app.on('window-all-closed', () => app.quit())

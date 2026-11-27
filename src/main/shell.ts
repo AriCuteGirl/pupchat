@@ -3,6 +3,7 @@ import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
 import { parseUnread, type Unread } from './badge'
+import { closePageGracefully } from './closePage'
 import { createServiceView } from './serviceView'
 import { LIMITS, type Settings } from './settings'
 import { servicesToSleep } from './sleep'
@@ -221,8 +222,9 @@ export class Shell {
   private sleep(slot: Slot): void {
     if (!slot.view) return
     if (slot.retryTimer) clearTimeout(slot.retryTimer)
-    this.win.contentView.removeChildView(slot.view)
-    slot.view.webContents.close()
+    const view = slot.view
+    this.win.contentView.removeChildView(view)
+    void closePageGracefully(view.webContents)
     slot.view = null
     slot.unread = 0
     slot.needsLogin = false
@@ -241,6 +243,14 @@ export class Shell {
       this.sleepAfterMinutes
     )
     for (const id of ids) this.sleep(this.slots.get(id)!)
+  }
+
+  /** Close every platform page properly (see closePageGracefully). Used before quitting. */
+  async closeAll(): Promise<void> {
+    const pages = [...this.slots.values()].flatMap((s) => (s.view ? [s.view] : []))
+    const t = Date.now()
+    await Promise.all(pages.map((v) => closePageGracefully(v.webContents)))
+    console.log(`[pupchat] closed ${pages.length} platform page(s) in ${Date.now() - t} ms`)
   }
 
   layout(): void {
