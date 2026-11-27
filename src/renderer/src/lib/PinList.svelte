@@ -201,7 +201,10 @@
   }
   .av-wrap {
     position: relative;
+    display: block;
     flex: none;
+    width: 32px;
+    height: 32px;
   }
   .badge {
     position: absolute;
@@ -215,6 +218,7 @@
     box-shadow: 0 0 0 2px rgba(30, 30, 36, 0.95);
   }
   .av {
+    display: block;
     width: 32px;
     height: 32px;
     flex: none;

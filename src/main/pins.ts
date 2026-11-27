@@ -28,13 +28,20 @@ export function savePins(p: Pins): void {
  */
 const FIND_HEADER_AVATAR = `(() => {
   const w = innerWidth
+  const looksLikeAvatar = (src) => /\\/avatars\\/|profile|scontent|\\/avatar|userpic|\\/u\\//i.test(src)
   const imgs = [...document.querySelectorAll('img')].filter((i) => {
     const r = i.getBoundingClientRect()
     const src = i.currentSrc || i.src
-    return r.width >= 18 && r.width <= 72 && Math.abs(r.width - r.height) < 4 && r.top >= 0 && r.top < 150 &&
-      r.left > w * 0.2 && /^https:/.test(src)
+    if (!/^https:/.test(src)) return false
+    // The site's own interface icons (same domain as the page) are never someone's avatar.
+    try { if (new URL(src).host === location.host) return false } catch { return false }
+    return r.width >= 18 && r.width <= 72 && Math.abs(r.width - r.height) < 4 && r.top >= 0 && r.top < 150 && r.left > w * 0.2
   })
-  imgs.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || b.getBoundingClientRect().left - a.getBoundingClientRect().left)
+  imgs.sort((a, b) => {
+    const pa = looksLikeAvatar(a.currentSrc || a.src) ? 0 : 1
+    const pb = looksLikeAvatar(b.currentSrc || b.src) ? 0 : 1
+    return pa - pb || a.getBoundingClientRect().top - b.getBoundingClientRect().top
+  })
   const i = imgs[0]
   return i ? (i.currentSrc || i.src) : ''
 })()`
