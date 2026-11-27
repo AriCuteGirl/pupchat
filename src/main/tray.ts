@@ -1,12 +1,16 @@
 import { app, Menu, nativeImage, Tray } from 'electron'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { SERVICES } from '../shared/services'
 import type { Settings } from '../shared/settings'
 
-/** Bundled resources: next to the app in dev, in resources/ when packaged. */
+/**
+ * Bundled resources: the app's own resources/ folder (dev, or inside the package), else
+ * Electron's resources dir (electron-builder extraResources). First one that has the file.
+ */
 export function resourcePath(...parts: string[]): string {
-  const base = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
-  return join(base, ...parts)
+  const candidates = [join(app.getAppPath(), 'resources', ...parts), join(process.resourcesPath, ...parts)]
+  return candidates.find((p) => existsSync(p)) ?? candidates[0]!
 }
 
 export interface TrayDeps {
