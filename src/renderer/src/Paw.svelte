@@ -46,10 +46,13 @@
   .paw:active {
     transform: scale(0.96);
   }
+  /* The paw window is clipped to a circle (Hyprland rounding 28 on a 56 px window), so the
+     badge sits inside that circle: centered at (40, 16), 18 px tall. */
   .badge {
     position: absolute;
-    top: 2px;
-    right: 2px;
+    top: 7px;
+    right: 7px;
+    box-shadow: 0 0 0 1.5px rgba(30, 30, 36, 0.85);
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
