@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Launcher entries (AppImage, Flatpak, Nix) start PupChat normally instead of hidden;
+  only launch at login starts it hidden
+
 ## 0.1.0 — 2026-11-27
 
 First release.

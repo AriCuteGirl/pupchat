@@ -29,8 +29,6 @@ linux:
   description: >-
     PupChat docks WhatsApp, Instagram, Discord, Messenger and Telegram in one
     iMessage-style liquid-glass panel you open with a hotkey while gaming.
-  executableArgs:
-    - --hide
   desktop:
     entry:
       Name: PupChat
