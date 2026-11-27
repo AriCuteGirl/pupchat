@@ -48,6 +48,8 @@ export const CH = {
   updateSettings: 'pupchat:update-settings',
   setSettingsOpen: 'pupchat:set-settings-open',
   importDiscordTheme: 'pupchat:import-discord-theme',
+  chooseSound: 'pupchat:choose-sound',
+  previewSound: 'pupchat:preview-sound',
   pawUnread: 'pupchat:paw-unread'
 } as const
 
@@ -67,4 +69,8 @@ export interface ShellApi {
   setSettingsOpen(open: boolean): void
   /** Import the themes enabled in Equicord for PupChat's Discord. */
   importDiscordTheme(): Promise<ImportResult>
+  /** Pick an audio file for the banner sound (file dialog). */
+  chooseSound(): void
+  /** Play the banner sound once. */
+  previewSound(): void
 }

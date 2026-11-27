@@ -80,3 +80,13 @@ describe('bubble colors', () => {
     expect(rgbTriple('#0a84ff')).toBe('10, 132, 255')
   })
 })
+
+describe('banner sound', () => {
+  it('accepts absolute audio paths only and clamps the volume', () => {
+    expect(validate({ bannerSound: '/home/x/Stažené/Sound.mp3', bannerVolume: 3 }, IDS)).toMatchObject({ bannerSound: '/home/x/Stažené/Sound.mp3', bannerVolume: 1 })
+    expect(validate({ bannerSound: 'C:\\Users\\x\\ding.wav' }, IDS).bannerSound).toBe('C:\\Users\\x\\ding.wav')
+    expect(validate({ bannerSound: 'relative.mp3' }, IDS).bannerSound).toBe('')
+    expect(validate({ bannerSound: '/etc/passwd' }, IDS).bannerSound).toBe('')
+    expect(validate({}, IDS).bannerVolume).toBe(0.8)
+  })
+})

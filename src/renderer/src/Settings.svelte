@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, Bell, Bone, Download, MessageCircle, Mic, Palette, PawPrint, Power, VolumeX, Wand, X } from '@lucide/svelte'
+  import { ArrowDown, ArrowUp, Bell, Bone, Download, MessageCircle, Mic, Music, Palette, PawPrint, Play, Power, VolumeX, Wand, X } from '@lucide/svelte'
   import type { ShellApi, ShellState } from '../../shared/ipc'
   import { SERVICES } from '../../shared/services'
   import { LIMITS, SLEEP_CHOICES, textOn, type BubbleColors, type ServicePrefs, type Settings } from '../../shared/settings'
@@ -112,6 +112,29 @@
         <span class="desc">Clicking back into your game closes the panel.</span>
       </div>
       <Switch label="Hide when you click another window" checked={s.hideOnBlur} onchange={(v) => update({ hideOnBlur: v })} />
+    </div>
+    <div class="row stacked">
+      <div class="line">
+        <span class="ico" style:background="#ff375f"><Music size={16} /></span>
+        <div class="label">
+          <span class="title">Banner sound</span>
+          <span class="desc" title={s.bannerSound}>
+            {s.bannerSound ? s.bannerSound.split(/[\\/]/).pop() : 'None. Plays when a banner slides in (not for muted platforms).'}
+          </span>
+        </div>
+        {#if s.bannerSound}
+          <button class="mini" aria-label="Play banner sound" title="Play" onclick={() => api.previewSound()}><Play size={15} /></button>
+          <button class="text-btn" onclick={() => update({ bannerSound: '' })}>Remove</button>
+        {/if}
+        <button class="text-btn" onclick={() => api.chooseSound()}>{s.bannerSound ? 'Change…' : 'Choose…'}</button>
+      </div>
+      {#if s.bannerSound}
+        <div class="control-line slider-line">
+          <span class="end">Quiet</span>
+          <GlassSlider label="Banner sound volume" min={0} max={1} value={s.bannerVolume} oninput={(v) => update({ bannerVolume: v })} />
+          <span class="end">Loud</span>
+        </div>
+      {/if}
     </div>
     <div class="row stacked">
       <div class="line">

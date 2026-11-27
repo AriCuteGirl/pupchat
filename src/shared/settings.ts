@@ -50,6 +50,10 @@ export interface Settings {
   sleepAfterMinutes: number
   /** Silence banners and platform sounds while the panel is hidden; badges keep working. */
   gameMode: boolean
+  /** Sound played when a banner slides in: an audio file on this computer, '' = none. */
+  bannerSound: string
+  /** Banner sound volume, 0 to 1. */
+  bannerVolume: number
   /** Start PupChat (hidden) when you log in. */
   launchAtLogin: boolean
   /** Global show/hide shortcut on Windows (Electron accelerator). */
@@ -94,6 +98,8 @@ export function defaults(ids: readonly string[]): Settings {
     hideOnBlur: false,
     sleepAfterMinutes: 0,
     gameMode: false,
+    bannerSound: '',
+    bannerVolume: 0.8,
     launchAtLogin: false,
     windowsHotkey: 'Ctrl+Shift+Space'
   }
@@ -109,6 +115,16 @@ function colorsOf(v: unknown, d: BubbleColors): BubbleColors {
   const o = isObj(v) ? v : {}
   return { out: hex(o['out'], d.out), in: hex(o['in'], d.in) }
 }
+/** An absolute path to an audio file (no control characters). */
+export function isSoundPath(p: string): boolean {
+  return (
+    p.length < 1024 &&
+    /^(\/|[A-Za-z]:\\)/.test(p) &&
+    !/[\u0000-\u001f]/.test(p) &&
+    /\.(mp3|ogg|oga|opus|wav|m4a|aac|flac|webm)$/i.test(p)
+  )
+}
+
 /** Electron accelerator: modifiers and one key, e.g. "Ctrl+Shift+Space". */
 const HOTKEY = /^((Ctrl|Control|Alt|Shift|Super|Meta|CommandOrControl|CmdOrCtrl)\+){1,3}[A-Za-z0-9]{1,9}$/
 
@@ -166,6 +182,8 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
     hideOnBlur: bool(o['hideOnBlur'], d.hideOnBlur),
     sleepAfterMinutes: (SLEEP_CHOICES as readonly number[]).includes(sleep) ? sleep : d.sleepAfterMinutes,
     gameMode: bool(o['gameMode'], d.gameMode),
+    bannerSound: typeof o['bannerSound'] === 'string' && isSoundPath(o['bannerSound']) ? o['bannerSound'] : '',
+    bannerVolume: isNum(o['bannerVolume']) ? Math.round(clamp(o['bannerVolume'], 0, 1) * 100) / 100 : d.bannerVolume,
     launchAtLogin: bool(o['launchAtLogin'], d.launchAtLogin),
     windowsHotkey:
       typeof o['windowsHotkey'] === 'string' && HOTKEY.test(o['windowsHotkey']) ? o['windowsHotkey'] : d.windowsHotkey

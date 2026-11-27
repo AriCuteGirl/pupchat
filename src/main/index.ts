@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, screen, type WebContents } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, type WebContents } from 'electron'
+import { readFileSync, statSync } from 'node:fs'
+import { extname } from 'node:path'
 import { join } from 'node:path'
 import { CH } from '../shared/ipc'
 import { windowWidth } from '../shared/layout'
@@ -237,6 +239,7 @@ async function start(): Promise<void> {
     if (!set.services[svc.id]?.notifications || set.gameMode) return
     if (p.isVisible && shell.activeId() === svc.id && !shell.isSettingsOpen) return
     banners.push({
+      silent: Boolean(set.services[svc.id]?.muted),
       service: svc.id,
       name: svc.name,
       title: str(r['title'], 120) || svc.name,
@@ -255,6 +258,7 @@ async function start(): Promise<void> {
       if ((lastRealNotification.get(id) ?? 0) >= at - 500) return
       if (!bannerAllowed(id)) return
       banners.push({
+        silent: Boolean(shell.current.services[id]?.muted),
         service: id,
         name,
         title: added === 1 ? 'New message' : `${added} new messages`,
@@ -295,6 +299,42 @@ async function start(): Promise<void> {
   }
   applyHotkey()
 
+  // Banner sound: read the chosen file once into memory (≤ 2 MB) and hand it to the banner.
+  const SOUND_MIME: Record<string, string> = {
+    '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg',
+    '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.flac': 'audio/flac', '.webm': 'audio/webm'
+  }
+  let soundData = ''
+  const loadSound = (preview = false): void => {
+    const path = shell.current.bannerSound
+    soundData = ''
+    if (path) {
+      try {
+        if (statSync(path).size <= 2_000_000)
+          soundData = `data:${SOUND_MIME[extname(path).toLowerCase()] ?? 'audio/mpeg'};base64,${readFileSync(path).toString('base64')}`
+      } catch (e) {
+        console.warn('[pupchat] banner sound:', e instanceof Error ? e.message : e)
+      }
+    }
+    void banners.setSound(soundData, shell.current.bannerVolume, preview)
+  }
+  loadSound()
+  ipcMain.on(CH.chooseSound, (e) => {
+    if (e.sender !== win.webContents) return
+    void dialog
+      .showOpenDialog(win, {
+        title: 'Banner sound',
+        properties: ['openFile'],
+        filters: [{ name: 'Audio', extensions: ['mp3', 'ogg', 'oga', 'opus', 'wav', 'm4a', 'aac', 'flac', 'webm'] }]
+      })
+      .then((r) => {
+        if (!r.canceled && r.filePaths[0]) shell.updateSettings({ bannerSound: r.filePaths[0] })
+      })
+  })
+  ipcMain.on(CH.previewSound, (e) => {
+    if (e.sender === win.webContents) void banners.setSound(soundData, shell.current.bannerVolume, true)
+  })
+
   // Settings that act outside the shell.
   p.onChange(() => shell.applyAudio()) // game mode: quiet while hidden
   p.onOtherWindowFocused(() => {
@@ -307,6 +347,8 @@ async function start(): Promise<void> {
     }
     if (s.gameMode && !prev.gameMode) banners.clear()
     if (s.windowsHotkey !== prev.windowsHotkey) applyHotkey()
+    if (s.bannerSound !== prev.bannerSound) loadSound(Boolean(s.bannerSound))
+    else if (s.bannerVolume !== prev.bannerVolume) void banners.setSound(soundData, s.bannerVolume)
     if (s.launchAtLogin !== prev.launchAtLogin) {
       try {
         setLaunchAtLogin(s.launchAtLogin)

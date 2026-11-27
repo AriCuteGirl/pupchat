@@ -16,6 +16,8 @@ export interface BannerItem {
   /** The notification inside the page, and the page it came from (to fire its click). */
   notifId: number
   pageId: number
+  /** Show without the banner sound (muted platform). */
+  silent?: boolean
 }
 
 /** Only images we can show without loading anything odd: https, or small inline images. */
@@ -108,18 +110,25 @@ export class Banners {
       this.win.hide()
       return
     }
-    void this.send().then(() => {
+    void this.send(true).then(() => {
       this.deps.place()
       if (!this.win.isVisible()) this.win.showInactive()
       this.arm(SHOW_MS)
     })
   }
 
-  private async send(): Promise<void> {
+  private async send(isNew = false): Promise<void> {
     if (!this.current) return
     await this.ready
-    const { service, name, title, body, icon } = this.current
-    this.win.webContents.send('pupchat:banner-show', { service, name, title, body, icon, more: this.queue.length })
+    const { service, name, title, body, icon, silent } = this.current
+    const play = isNew && !silent
+    this.win.webContents.send('pupchat:banner-show', { service, name, title, body, icon, more: this.queue.length, play })
+  }
+
+  /** Set the banner sound (data: URL or '' for none). `preview` plays it once right away. */
+  async setSound(src: string, volume: number, preview = false): Promise<void> {
+    await this.ready
+    this.win.webContents.send('pupchat:banner-sound', src, volume, preview)
   }
 
   private arm(ms: number | null): void {

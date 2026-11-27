@@ -17,6 +17,8 @@ const api: ShellApi = {
   reload: (id) => ipcRenderer.send(CH.reload, id),
   updateSettings: (patch) => ipcRenderer.send(CH.updateSettings, patch),
   setSettingsOpen: (open) => ipcRenderer.send(CH.setSettingsOpen, open),
-  importDiscordTheme: () => ipcRenderer.invoke(CH.importDiscordTheme) as Promise<ImportResult>
+  importDiscordTheme: () => ipcRenderer.invoke(CH.importDiscordTheme) as Promise<ImportResult>,
+  chooseSound: () => ipcRenderer.send(CH.chooseSound),
+  previewSound: () => ipcRenderer.send(CH.previewSound)
 }
 contextBridge.exposeInMainWorld('pupchat', api)

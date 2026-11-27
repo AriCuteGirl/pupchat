@@ -10,10 +10,12 @@
     body: string
     icon: string
     more: number
+    play: boolean
   }
   const bridge = (window as unknown as {
     banner: {
       onShow: (fn: (b: BannerData) => void) => void
+      onSound: (fn: (src: string, volume: number, preview: boolean) => void) => void
       click: () => void
       dismiss: () => void
       hover: (on: boolean) => void
@@ -22,9 +24,23 @@
 
   let b = $state<BannerData | null>(null)
   let key = $state(0)
+  // Banner sound: one audio element, restarted for each new banner.
+  const audio = new Audio()
+  audio.preload = 'auto'
+  const play = (): void => {
+    if (!audio.src) return
+    audio.currentTime = 0
+    void audio.play().catch(() => {})
+  }
+  bridge.onSound((src, volume, preview) => {
+    if (audio.src !== src) audio.src = src
+    audio.volume = volume
+    if (preview) play()
+  })
   bridge.onShow((data) => {
     b = data
     key++
+    if (data.play) play()
   })
   const logo = $derived(b ? serviceIcon(SERVICES.find((s) => s.id === b!.service)?.icon ?? '') : undefined)
   let iconFailed = $state(false)
