@@ -15,6 +15,10 @@ export interface ShellState {
   services: ServiceState[]
   active: string
   collapsed: boolean
+  /** Remembered panel width (list shown), px. */
+  panelWidth: number
+  /** Zoom of the active platform (1 = 100 %). */
+  activeZoom: number
 }
 
 /** The only channels the shell may use. */
@@ -24,6 +28,8 @@ export const CH = {
   select: 'pupchat:select',
   setCollapsed: 'pupchat:set-collapsed',
   retry: 'pupchat:retry',
+  setPanelWidth: 'pupchat:set-panel-width',
+  resetZoom: 'pupchat:reset-zoom',
   pawUnread: 'pupchat:paw-unread'
 } as const
 
@@ -33,4 +39,6 @@ export interface ShellApi {
   select(id: string): void
   setCollapsed(collapsed: boolean): void
   retry(id: string): void
+  setPanelWidth(px: number): void
+  resetZoom(): void
 }

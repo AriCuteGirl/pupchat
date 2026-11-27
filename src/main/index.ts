@@ -1,12 +1,13 @@
 import { app, BrowserWindow, screen, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { CH } from '../shared/ipc'
-import { panelWidth } from '../shared/layout'
+import { windowWidth } from '../shared/layout'
 import { totalUnread } from './badge'
 import { isCliCommand, parseCli, type CliCommand } from './cli'
 import { isHyprland, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
 import { createPaw, PAW_TITLE } from './paw'
+import { loadSettings, makeSaver } from './settings'
 import { Shell } from './shell'
 
 const PANEL_TITLE = 'PupChat'
@@ -22,8 +23,11 @@ if (!app.requestSingleInstanceLock(launch as unknown as Record<string, unknown>)
 }
 
 async function start(): Promise<void> {
+  const settingsFile = join(app.getPath('userData'), 'settings.json')
+  const settings = loadSettings(settingsFile)
+  const save = makeSaver(settingsFile)
   const area = screen.getPrimaryDisplay().workArea
-  const width = panelWidth(false)
+  const width = windowWidth(settings.panelWidth, settings.collapsed)
   const win = new BrowserWindow({
     title: PANEL_TITLE,
     width,
@@ -65,6 +69,10 @@ async function start(): Promise<void> {
       } else if (input.control && input.shift && !input.alt && input.key.toLowerCase() === 'b') {
         e.preventDefault()
         shell?.setCollapsed(!shell.isCollapsed)
+      } else if (input.control && !input.alt && ['Equal', 'NumpadAdd', 'Minus', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(input.code) && wc !== win.webContents) {
+        // Zoom the platform you're in; remembered per platform.
+        e.preventDefault()
+        shell?.zoomActive(input.code.includes('0') ? 0 : input.code === 'Minus' || input.code === 'NumpadSubtract' ? -1 : 1)
       } else if (input.control && !input.shift && !input.alt && /^Digit[1-9]$/.test(input.code)) {
         // Ctrl+1..9 by key position, so it also works on the CZ layout (+ěščř…).
         e.preventDefault()
@@ -78,7 +86,7 @@ async function start(): Promise<void> {
 
   // Registered before any service view exists, so every view gets the keys.
   let panel: Panel | null = null
-  const shell: Shell = new Shell(win)
+  const shell: Shell = new Shell(win, settings, save)
 
   if (process.env['ELECTRON_RENDERER_URL']) void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
@@ -98,19 +106,39 @@ async function start(): Promise<void> {
   panel = p
   shell.isPanelVisible = () => p.isVisible
 
-  // Flush to the right edge, full height; width follows the collapsed state.
+  // Flush to the right edge, full height. Calls are coalesced: while one placement runs,
+  // only the newest request waits (dragging the edge sends many).
+  let placing = false
+  let placeAgain = false
   const place = (): void => {
-    const w = panelWidth(shell.isCollapsed)
-    if (isHyprland()) void placePanel(PANEL_TITLE, w).catch((e) => console.warn('[pupchat] place:', e))
-    else {
+    if (placing) {
+      placeAgain = true
+      return
+    }
+    placing = true
+    const w = windowWidth(shell.panelWidth, shell.isCollapsed)
+    const done = (): void => {
+      placing = false
+      if (placeAgain) {
+        placeAgain = false
+        place()
+      }
+    }
+    if (isHyprland()) {
+      placePanel(PANEL_TITLE, w)
+        .catch((e) => console.warn('[pupchat] place:', e))
+        .finally(done)
+    } else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
       win.setBounds({ x: wa.x + wa.width - w, y: wa.y, width: w, height: wa.height })
+      done()
     }
   }
-  let lastCollapsed = shell.isCollapsed
+  let lastW = windowWidth(shell.panelWidth, shell.isCollapsed)
   shell.onState((s) => {
-    if (s.collapsed !== lastCollapsed) {
-      lastCollapsed = s.collapsed
+    const w = windowWidth(s.panelWidth, s.collapsed)
+    if (w !== lastW) {
+      lastW = w
       place()
     }
   })
@@ -128,7 +156,7 @@ async function start(): Promise<void> {
   // so one click opens and the next click slides the panel away again.
   const paw = createPaw(() => void p.toggleFromPaw())
   const placeTheWholeEdge = (): void => {
-    const w = panelWidth(shell.isCollapsed)
+    const w = windowWidth(shell.panelWidth, shell.isCollapsed)
     if (isHyprland()) void placePaw(PAW_TITLE, p.isVisible, w).catch(() => {})
     else {
       const wa = screen.getDisplayMatching(win.getBounds()).workArea
@@ -139,7 +167,7 @@ async function start(): Promise<void> {
   p.onChange(placeTheWholeEdge)
   let lastPawWidth = -1
   shell.onState((st) => {
-    const w = panelWidth(st.collapsed)
+    const w = windowWidth(st.panelWidth, st.collapsed)
     if (w !== lastPawWidth) {
       lastPawWidth = w
       placeTheWholeEdge()

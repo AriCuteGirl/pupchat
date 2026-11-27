@@ -35,6 +35,37 @@
         return s.unread > 0 ? `${s.unread} unread` : 'Up to date'
     }
   }
+  // Drag the left edge to resize. Wayland doesn't tell a window where it is on screen, so
+  // we add up relative pointer movement; dragging left makes the panel wider.
+  let dragging = $state(false)
+  let dragStart = 0
+  let moved = 0
+  let frame = 0
+  function startDrag(e: PointerEvent): void {
+    if (!shell) return
+    dragging = true
+    dragStart = shell.panelWidth
+    moved = 0
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+  function onDrag(e: PointerEvent): void {
+    if (!dragging) return
+    moved += e.movementX
+    if (frame) return
+    frame = requestAnimationFrame(() => {
+      frame = 0
+      api.setPanelWidth(dragStart - moved)
+    })
+  }
+  function endDrag(): void {
+    dragging = false
+  }
+  function resizeKey(e: KeyboardEvent): void {
+    if (!shell) return
+    if (e.key === 'ArrowLeft') api.setPanelWidth(shell.panelWidth + 20)
+    else if (e.key === 'ArrowRight') api.setPanelWidth(shell.panelWidth - 20)
+  }
+
   const label = (u: number | 'dot'): string => (u === 'dot' ? '' : u > 99 ? '99+' : String(u))
   const iconFor = (id: string) => serviceIcon(SERVICES.find((s) => s.id === id)?.icon ?? '')
 </script>
@@ -48,6 +79,22 @@
     style:--inset="{LAYOUT.inset}px"
     style:--view-r="{LAYOUT.viewRadius}px"
   >
+    <!-- A focusable separator moved with arrow keys is the ARIA "window splitter" pattern. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+    <div
+      class="grip"
+      class:dragging
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panel"
+      aria-valuenow={shell.panelWidth}
+      tabindex="0"
+      onpointerdown={startDrag}
+      onpointermove={onDrag}
+      onpointerup={endDrag}
+      onpointercancel={endDrag}
+      onkeydown={resizeKey}
+    ></div>
     <aside class="sidebar" aria-label="Platforms">
       <div class="top">
         {#if !collapsed}<h1 class="title">PupChat</h1>{/if}
@@ -102,7 +149,14 @@
 
     <section class="main">
       <header class="header">
-        <span class="headline">{active?.name ?? ''}</span>
+        <span class="headline">
+          {active?.name ?? ''}
+          {#if shell.activeZoom !== 1}
+            <button class="zoom" title="Reset zoom (Ctrl+0)" onclick={() => api.resetZoom()}
+              >{Math.round(shell.activeZoom * 100)} %</button
+            >
+          {/if}
+        </span>
         {#if active?.needsLogin}<span class="hint">Log in below to start chatting</span>{/if}
       </header>
       <div class="stage">
@@ -141,6 +195,49 @@
     background: var(--glass-fill);
     box-shadow: var(--edge-glass);
     overflow: hidden;
+  }
+
+  /* Resize grip on the left edge */
+  .grip {
+    position: absolute;
+    left: 0;
+    top: var(--r-xl);
+    bottom: var(--r-xl);
+    width: 14px;
+    cursor: ew-resize;
+    z-index: 2;
+    border-radius: var(--r-pill);
+  }
+  .grip::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    width: 4px;
+    height: 44px;
+    margin-top: -22px;
+    border-radius: var(--r-pill);
+    background: var(--glass-highlight);
+    opacity: 0;
+    transition: opacity var(--dur-fast);
+  }
+  .grip:hover::after,
+  .grip.dragging::after,
+  .grip:focus-visible::after {
+    opacity: 0.8;
+  }
+  .zoom {
+    margin-left: var(--sp-2);
+    padding: 1px var(--sp-2);
+    border-radius: var(--r-pill);
+    background: var(--glass-hover);
+    color: var(--c-text-2);
+    font-size: var(--fs-caption);
+    font-variant-numeric: tabular-nums;
+  }
+  .zoom:hover {
+    background: var(--glass-selected);
+    color: var(--c-text);
   }
 
   /* Sidebar */

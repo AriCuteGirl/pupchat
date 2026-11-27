@@ -4,6 +4,7 @@ import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
 import { parseUnread, type Unread } from './badge'
 import { createServiceView } from './serviceView'
+import { LIMITS, type Settings } from './settings'
 import { servicesToSleep } from './sleep'
 
 interface Slot {
@@ -24,13 +25,16 @@ const OFFLINE_RETRY_MS = 15_000
 export class Shell {
   private slots = new Map<string, Slot>()
   private active: string
-  private collapsed = false
   private listeners: Array<(s: ShellState) => void> = []
   /** Minutes before an unused platform sleeps; 0 = never. Becomes a setting in step 5. */
   sleepAfterMinutes = 0
   isPanelVisible: () => boolean = () => true
 
-  constructor(private readonly win: BrowserWindow) {
+  constructor(
+    private readonly win: BrowserWindow,
+    private readonly settings: Settings,
+    private readonly save: (s: Settings) => void
+  ) {
     for (const def of SERVICES)
       this.slots.set(def.id, {
         def,
@@ -49,7 +53,11 @@ export class Shell {
   }
 
   get isCollapsed(): boolean {
-    return this.collapsed
+    return this.settings.collapsed
+  }
+
+  get panelWidth(): number {
+    return this.settings.panelWidth
   }
 
   activeView(): WebContentsView | null {
@@ -70,7 +78,9 @@ export class Shell {
         needsLogin: s.needsLogin
       })),
       active: this.active,
-      collapsed: this.collapsed
+      collapsed: this.settings.collapsed,
+      panelWidth: this.settings.panelWidth,
+      activeZoom: this.zoomOf(this.active)
     }
   }
 
@@ -99,9 +109,34 @@ export class Shell {
   }
 
   setCollapsed(c: boolean): void {
-    if (c === this.collapsed) return
-    this.collapsed = c
+    if (c === this.settings.collapsed) return
+    this.settings.collapsed = c
+    this.save(this.settings)
     this.layout()
+    this.emit()
+  }
+
+  setPanelWidth(px: number): void {
+    const w = Math.round(Math.min(LIMITS.maxWidth, Math.max(LIMITS.minWidth, px)))
+    if (w === this.settings.panelWidth) return
+    this.settings.panelWidth = w
+    this.save(this.settings)
+    this.emit()
+  }
+
+  private zoomOf(id: string): number {
+    return this.settings.zoom[id] ?? 1
+  }
+
+  /** Ctrl+= / Ctrl+- / Ctrl+0 on the active platform; remembered per platform. */
+  zoomActive(step: 1 | -1 | 0): void {
+    const id = this.active
+    const z = step === 0 ? 1 : Math.round((this.zoomOf(id) + step * 0.1) * 10) / 10
+    const next = Math.min(LIMITS.maxZoom, Math.max(LIMITS.minZoom, z))
+    if (next === 1) delete this.settings.zoom[id]
+    else this.settings.zoom[id] = next
+    this.save(this.settings)
+    this.slots.get(id)?.view?.webContents.setZoomFactor(next)
     this.emit()
   }
 
@@ -151,7 +186,10 @@ export class Shell {
     wc.on('did-start-loading', () => {
       if (slot.status !== 'ready') this.setStatus(slot, 'loading')
     })
-    wc.on('did-finish-load', () => this.setStatus(slot, 'ready'))
+    wc.on('did-finish-load', () => {
+      wc.setZoomFactor(this.zoomOf(slot.def.id))
+      this.setStatus(slot, 'ready')
+    })
     wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
       // -3 = aborted (e.g. a redirect replaced the load); not a real failure.
       if (!isMainFrame || code === -3) return
@@ -199,7 +237,7 @@ export class Shell {
 
   layout(): void {
     const { width, height } = this.win.getContentBounds()
-    const b = viewBounds({ width, height }, this.collapsed)
+    const b = viewBounds({ width, height }, this.settings.collapsed)
     for (const s of this.slots.values()) s.view?.setBounds(b)
   }
 
@@ -215,6 +253,12 @@ export class Shell {
     })
     ipcMain.on(CH.retry, (e, id: unknown) => {
       if (fromShell(e) && typeof id === 'string') this.retry(id)
+    })
+    ipcMain.on(CH.setPanelWidth, (e, px: unknown) => {
+      if (fromShell(e) && typeof px === 'number' && Number.isFinite(px)) this.setPanelWidth(px)
+    })
+    ipcMain.on(CH.resetZoom, (e) => {
+      if (fromShell(e)) this.zoomActive(0)
     })
   }
 }

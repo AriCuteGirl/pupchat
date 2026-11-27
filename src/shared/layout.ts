@@ -1,7 +1,5 @@
 /** Geometry shared by main (positions the service view) and the shell UI (draws around it). */
 export const LAYOUT = {
-  panelWidth: 760,
-  collapsedPanelWidth: 440,
   sidebarWidth: 232,
   railWidth: 68,
   headerHeight: 52,
@@ -14,8 +12,12 @@ export function sidebarWidth(collapsed: boolean): number {
   return collapsed ? LAYOUT.railWidth : LAYOUT.sidebarWidth
 }
 
-export function panelWidth(collapsed: boolean): number {
-  return collapsed ? LAYOUT.collapsedPanelWidth : LAYOUT.panelWidth
+/**
+ * Window width for a remembered panel width. Collapsing removes only the list,
+ * so the chat keeps its width (sites like WhatsApp have a minimum page width).
+ */
+export function windowWidth(panelWidth: number, collapsed: boolean): number {
+  return collapsed ? panelWidth - (LAYOUT.sidebarWidth - LAYOUT.railWidth) : panelWidth
 }
 
 /** Where the service's web page sits inside a window of the given size. */
