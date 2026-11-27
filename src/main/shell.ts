@@ -5,7 +5,9 @@ import { SERVICES, type ServiceDef } from '../shared/services'
 import { LIMITS, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
-import { skinCss } from './skins'
+import { EMBEDDED_FONT_OK, interFontFace, skinCss } from './skins'
+import { readFileSync } from 'node:fs'
+import { resourcePath } from './tray'
 import { createServiceView } from './serviceView'
 import { servicesToSleep } from './sleep'
 
@@ -19,6 +21,20 @@ interface Slot {
   needsLogin: boolean
   lastUsed: number
   retryTimer: NodeJS.Timeout | null
+}
+
+/** Inter embedded for the iMessage look (read once, only when first needed). */
+let fontFaceCache: string | null = null
+function fontFace(): string {
+  if (fontFaceCache !== null) return fontFaceCache
+  try {
+    const b64 = (f: string): string => readFileSync(resourcePath('fonts', f)).toString('base64')
+    fontFaceCache = interFontFace(b64('inter-latin-wght-normal.woff2'), b64('inter-latin-ext-wght-normal.woff2'))
+  } catch (e) {
+    console.warn('[pupchat] Inter font not found:', e)
+    fontFaceCache = ''
+  }
+  return fontFaceCache
 }
 
 /** Chromium net errors that mean "no connection", not "the site is broken". */
@@ -231,7 +247,7 @@ export class Shell {
     const wc = slot.view?.webContents
     if (!wc || wc.isDestroyed()) return
     const want = Boolean(this.settings.services[slot.def.id]?.skin)
-    const css = skinCss(slot.def.id)
+    const css = skinCss(slot.def.id, EMBEDDED_FONT_OK.has(slot.def.id) ? fontFace() : '')
     if (want && css && !slot.skinKey) {
       slot.skinKey = await wc.insertCSS(css, { cssOrigin: 'author' })
     } else if (!want && slot.skinKey) {
