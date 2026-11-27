@@ -84,6 +84,16 @@ export class Shell {
     return this.active
   }
 
+  get isSettingsOpen(): boolean {
+    return this.settingsOpen
+  }
+
+  /** Which platform a page belongs to (for notifications coming from it). */
+  serviceOf(wc: Electron.WebContents): { id: string; name: string } | null {
+    for (const s of this.slots.values()) if (s.view?.webContents === wc) return { id: s.def.id, name: s.def.name }
+    return null
+  }
+
   onState(fn: (s: ShellState) => void): void {
     this.listeners.push(fn)
   }

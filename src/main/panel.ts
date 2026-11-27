@@ -84,6 +84,11 @@ export class Panel {
     }
   }
 
+  /** Give focus back to the window you were in before PupChat (Hyprland only). */
+  async refocusPrevious(): Promise<void> {
+    await this.events?.refocusPrevious()
+  }
+
   /** For the paw: closing from a click must not leave focus on the paw. */
   async toggleFromPaw(): Promise<void> {
     const wasOpen = this.visible

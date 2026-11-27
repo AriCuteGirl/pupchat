@@ -1,15 +1,17 @@
-import { app, BrowserWindow, screen, type WebContents } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { CH } from '../shared/ipc'
 import { windowWidth } from '../shared/layout'
 import { totalUnread } from './badge'
 import { isCliCommand, parseCli, type CliCommand } from './cli'
-import { isHyprland, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
+import { isHyprland, placeBanner, placePanel, placePaw, SPECIAL, workspaceOf } from './hyprland'
 import { Panel } from './panel'
 import { createPaw, PAW_TITLE } from './paw'
 import { setLaunchAtLogin } from './autostart'
+import { BANNER_SIZE, BANNER_TITLE, Banners, safeIcon } from './banners'
 import { loadSettings, makeSaver } from './settings'
 import { Shell, SERVICE_IDS } from './shell'
+import { PupTray } from './tray'
 
 const PANEL_TITLE = 'PupChat'
 
@@ -196,6 +198,63 @@ async function start(): Promise<void> {
   })
   paw.once('show', placeTheWholeEdge)
 
+  // Notification banners: the sites' own notifications, shown iMessage-style.
+  const banners = new Banners({
+    open: (service) => {
+      shell.select(service)
+      void p.show()
+    },
+    place: () => {
+      const side = shell.current.side
+      if (isHyprland()) void placeBanner(BANNER_TITLE, BANNER_SIZE, p.homeMonitor, side).catch(() => {})
+      else {
+        const wa = screen.getDisplayMatching(win.getBounds()).workArea
+        banners.win.setPosition(Math.round(wa.x + (wa.width - BANNER_SIZE.width) / 2), wa.y + 10)
+      }
+    },
+    refocusPrevious: () => void p.refocusPrevious()
+  })
+  ipcMain.on('pupchat:notify', (e, raw: unknown) => {
+    const svc = shell.serviceOf(e.sender)
+    if (!svc || typeof raw !== 'object' || raw === null) return
+    const r = raw as Record<string, unknown>
+    const str = (v: unknown, n: number): string => (typeof v === 'string' ? v.slice(0, n) : '')
+    const set = shell.current
+    // Banners off for this platform, game mode, or you're already looking at it: no banner.
+    if (!set.services[svc.id]?.notifications || set.gameMode) return
+    if (p.isVisible && shell.activeId() === svc.id && !shell.isSettingsOpen) return
+    banners.push({
+      service: svc.id,
+      name: svc.name,
+      title: str(r['title'], 120) || svc.name,
+      body: str(r['body'], 400),
+      icon: safeIcon(str(r['icon'], 300_000)),
+      notifId: typeof r['id'] === 'number' && Number.isInteger(r['id']) ? r['id'] : -1,
+      pageId: e.sender.id
+    })
+  })
+  // Opening PupChat on a platform clears its waiting banners.
+  p.onChange((v) => v && banners.clear(shell.activeId()))
+
+  // Tray icon: show/hide, game mode, mute, settings, quit.
+  const tray = new PupTray({
+    isVisible: () => p.isVisible,
+    toggle: () => void p.toggle(),
+    openSettings: () => run({ action: 'settings', service: null }),
+    settings: () => shell.current,
+    update: (patch) => shell.updateSettings(patch)
+  })
+  const unreadNow = (): number => totalUnread(shell.state().services.map((x) => x.unread))
+  let trayKey = ''
+  shell.onState((st) => {
+    const key = JSON.stringify([st.settings.gameMode, st.settings.order, st.settings.services, unreadNow()])
+    if (key !== trayKey) {
+      trayKey = key
+      tray.refresh(unreadNow())
+    }
+  })
+  p.onChange(() => tray.refresh(unreadNow()))
+
   // Settings that act outside the shell.
   p.onChange(() => shell.applyAudio()) // game mode: quiet while hidden
   p.onOtherWindowFocused(() => {
@@ -206,6 +265,7 @@ async function start(): Promise<void> {
       place()
       placeTheWholeEdge()
     }
+    if (s.gameMode && !prev.gameMode) banners.clear()
     if (s.launchAtLogin !== prev.launchAtLogin) {
       try {
         setLaunchAtLogin(s.launchAtLogin)

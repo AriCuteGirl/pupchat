@@ -1,4 +1,5 @@
 import { WebContentsView, session, shell } from 'electron'
+import { join } from 'node:path'
 import { partitionFor, type ServiceDef } from '../shared/services'
 import { isExternalSafe, isServiceUrl } from './navigation'
 import { chromeUserAgent } from './userAgent'
@@ -42,6 +43,8 @@ export function createServiceView(service: ServiceDef, policy: ViewPolicy): WebC
   const view = new WebContentsView({
     webPreferences: {
       session: lockDownSession(service.id, policy),
+      // Only forwards the site's own notifications to PupChat's banners (see preload/service.ts).
+      preload: join(import.meta.dirname, '../preload/service.cjs'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,

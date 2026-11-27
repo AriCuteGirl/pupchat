@@ -10,7 +10,12 @@ export default defineConfig({
       isolatedEntries: true,
       externalizeDeps: false,
       rollupOptions: {
-        input: { paw: resolve('src/preload/paw.ts'), shell: resolve('src/preload/shell.ts') },
+        input: {
+          paw: resolve('src/preload/paw.ts'),
+          shell: resolve('src/preload/shell.ts'),
+          service: resolve('src/preload/service.ts'),
+          banner: resolve('src/preload/banner.ts')
+        },
         // Sandboxed preloads must be CommonJS.
         output: { format: 'cjs', entryFileNames: '[name].cjs' }
       }
@@ -21,7 +26,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/renderer/index.html'),
-          paw: resolve('src/renderer/paw.html')
+          paw: resolve('src/renderer/paw.html'),
+          banner: resolve('src/renderer/banner.html')
         }
       }
     },

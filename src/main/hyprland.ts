@@ -118,6 +118,20 @@ export async function placePanel(title: string, width: number, side: Side = 'rig
   await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = false, window = "${sel(title)}" })`])
 }
 
+/** Banner: top center of the paw's monitor, just below reserved areas (the bar). */
+export async function placeBanner(
+  title: string,
+  size: { width: number; height: number },
+  homeMonitor: number | null,
+  side: Side
+): Promise<void> {
+  const g = await edgeGeometry(size.width, homeMonitor, side)
+  if (!g) return
+  const x = Math.round((g.left + g.right - size.width) / 2)
+  const y = g.panel.y + 10
+  await hyprctl(['dispatch', `hl.dsp.window.move({ x = ${x}, y = ${y}, relative = false, window = "${sel(title)}" })`])
+}
+
 /**
  * The paw rides along: on the screen edge while the panel is closed, against the panel's
  * left edge while it is open (Hyprland animates the move, so it slides).
