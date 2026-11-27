@@ -10,6 +10,8 @@ import { focusPanel, HyprEvents, isHyprland, isSpecialOpen, toggleSpecial } from
 export class Panel {
   private visible = false
   private listeners: Array<(v: boolean) => void> = []
+  /** Called right before a window-mode show, to position the window. */
+  beforeShow: () => void = () => {}
   private monitorListeners: Array<() => void> = []
   private otherFocusListeners: Array<() => void> = []
   private events: HyprEvents | null = null
@@ -69,6 +71,7 @@ export class Panel {
     if (this.mode === 'special') {
       if (!(await isSpecialOpen())) await toggleSpecial()
     } else {
+      this.beforeShow()
       this.win.show()
       this.win.focus()
       // Wayland ignores focus requests from clients; on Hyprland ask the compositor.

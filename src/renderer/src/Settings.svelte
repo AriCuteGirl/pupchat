@@ -291,7 +291,9 @@
       <div class="row">
         <div class="label">
           <span class="title">Show/hide shortcut</span>
-          {#if hotkeyError}<span class="desc err">{hotkeyError}</span>{:else}<span class="desc">Works everywhere in Windows.</span>{/if}
+          {#if hotkeyError}<span class="desc err">{hotkeyError}</span>
+          {:else if shell.hotkeyProblem}<span class="desc err">Another app already uses this shortcut. Pick a different one.</span>
+          {:else}<span class="desc">Works everywhere in Windows, also in games (borderless/windowed).</span>{/if}
         </div>
         <input class="hotkey" aria-label="Show/hide shortcut" bind:value={hotkeyDraft} onchange={saveHotkey} oninput={() => (hotkeyError = '')} />
       </div>

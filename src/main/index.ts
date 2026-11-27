@@ -12,6 +12,7 @@ import { BANNER_SIZE, BANNER_TITLE, Banners, safeIcon } from './banners'
 import { loadSettings, makeSaver } from './settings'
 import { Shell, SERVICE_IDS } from './shell'
 import { PupTray } from './tray'
+import { activeWorkArea, glassWindowOptions, setGlobalHotkey } from './platform'
 
 const PANEL_TITLE = 'PupChat'
 
@@ -38,8 +39,7 @@ async function start(): Promise<void> {
     x: settings.side === 'left' ? area.x : area.x + area.width - width,
     y: area.y,
     frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
+    ...glassWindowOptions(),
     show: false,
     skipTaskbar: true,
     webPreferences: {
@@ -51,6 +51,8 @@ async function start(): Promise<void> {
   })
   // Keep our title so Hyprland rules and our own lookups can find the window.
   win.on('page-title-updated', (e) => e.preventDefault())
+  // Without a compositor that places us (Windows, other desktops): stay above games.
+  if (!isHyprland()) win.setAlwaysOnTop(true, 'screen-saver')
   win.webContents.on('will-navigate', (e) => e.preventDefault())
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   // Our own UI's errors go to the terminal (service pages' consoles are not logged).
@@ -132,12 +134,14 @@ async function start(): Promise<void> {
         .catch((e) => console.warn('[pupchat] place:', e))
         .finally(done)
     } else {
-      const wa = screen.getDisplayMatching(win.getBounds()).workArea
+      const wa = p.isVisible ? screen.getDisplayMatching(win.getBounds()).workArea : activeWorkArea()
       const x = shell.current.side === 'left' ? wa.x : wa.x + wa.width - w
       win.setBounds({ x, y: wa.y, width: w, height: wa.height })
       done()
     }
   }
+  // Window mode: open on the monitor the mouse is on.
+  p.beforeShow = place
   let lastW = windowWidth(shell.panelWidth, shell.isCollapsed)
   shell.onState((s) => {
     const w = windowWidth(s.panelWidth, s.collapsed)
@@ -208,7 +212,7 @@ async function start(): Promise<void> {
       const side = shell.current.side
       if (isHyprland()) void placeBanner(BANNER_TITLE, BANNER_SIZE, p.homeMonitor, side).catch(() => {})
       else {
-        const wa = screen.getDisplayMatching(win.getBounds()).workArea
+        const wa = activeWorkArea()
         banners.win.setPosition(Math.round(wa.x + (wa.width - BANNER_SIZE.width) / 2), wa.y + 10)
       }
     },
@@ -255,6 +259,13 @@ async function start(): Promise<void> {
   })
   p.onChange(() => tray.refresh(unreadNow()))
 
+  // Global show/hide shortcut (Windows, X11). Hyprland binds its own key.
+  const applyHotkey = (): void => {
+    const ok = setGlobalHotkey(shell.current.windowsHotkey, () => void p.toggle())
+    shell.setHotkeyProblem(!ok)
+  }
+  applyHotkey()
+
   // Settings that act outside the shell.
   p.onChange(() => shell.applyAudio()) // game mode: quiet while hidden
   p.onOtherWindowFocused(() => {
@@ -266,6 +277,7 @@ async function start(): Promise<void> {
       placeTheWholeEdge()
     }
     if (s.gameMode && !prev.gameMode) banners.clear()
+    if (s.windowsHotkey !== prev.windowsHotkey) applyHotkey()
     if (s.launchAtLogin !== prev.launchAtLogin) {
       try {
         setLaunchAtLogin(s.launchAtLogin)

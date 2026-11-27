@@ -26,6 +26,8 @@ export interface ShellState {
   settingsOpen: boolean
   /** process.platform of the main process ("linux", "win32", ...). */
   platform: string
+  /** The Windows/X11 global shortcut is taken by another app. */
+  hotkeyProblem: boolean
 }
 
 /** The only channels the shell may use. */

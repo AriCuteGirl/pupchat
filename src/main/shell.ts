@@ -53,6 +53,7 @@ export class Shell {
   private slots = new Map<string, Slot>()
   private active: string
   private settingsOpen = false
+  private hotkeyProblem = false
   private listeners: Array<(s: ShellState) => void> = []
   private settingsListeners: Array<(s: Settings, prev: Settings) => void> = []
   isPanelVisible: () => boolean = () => true
@@ -148,7 +149,8 @@ export class Shell {
       activeZoom: this.zoomOf(this.active),
       settings: structuredClone(this.settings),
       settingsOpen: this.settingsOpen,
-      platform: process.platform
+      platform: process.platform,
+      hotkeyProblem: this.hotkeyProblem
     }
   }
 
@@ -183,6 +185,13 @@ export class Shell {
 
   setPanelWidth(px: number): void {
     this.updateSettings({ panelWidth: Math.round(Math.min(LIMITS.maxWidth, Math.max(LIMITS.minWidth, px))) })
+  }
+
+  /** The global shortcut couldn't be registered (another app holds it). */
+  setHotkeyProblem(problem: boolean): void {
+    if (problem === this.hotkeyProblem) return
+    this.hotkeyProblem = problem
+    this.emit()
   }
 
   setSettingsOpen(open: boolean): void {
