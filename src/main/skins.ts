@@ -11,9 +11,12 @@
  */
 
 const C = {
-  blue: '#0a84ff',
-  bluePressed: '#0071e3',
-  gray: '#3a3a3c',
+  /** Your bubble color and its text, from Settings (colorsCss). */
+  blue: 'var(--pup-out, #0a84ff)',
+  blueText: 'var(--pup-out-text, #ffffff)',
+  bluePressed: 'color-mix(in srgb, var(--pup-out, #0a84ff) 85%, black)',
+  /** Their bubble color, from Settings. */
+  gray: 'var(--pup-in, #3a3a3c)',
   black: '#000000',
   surface: '#1c1c1e',
   surface2: '#2c2c2e',
@@ -36,7 +39,7 @@ const BASE_GLASS = `
 html { background: ${TINT} !important; }
 body { background: transparent !important; }`
 /** Round blue send button. */
-const SEND = `background-color: ${'#0a84ff'} !important; border-radius: 50% !important; color: #fff !important;`
+const SEND = `background-color: var(--pup-out, #0a84ff) !important; border-radius: 50% !important; color: var(--pup-out-text, #fff) !important;`
 
 /** "PupInter" is embedded where the site allows it; otherwise a local Inter or SF, then system. */
 const FONT = '"PupInter", "SF Pro Text", "Inter Variable", "Inter", -apple-system, system-ui, sans-serif'
@@ -80,18 +83,18 @@ ${BASE_GLASS}
 }
 #main header, #main footer, #side > header, [data-testid="chatlist-header"] { ${BAR} }
 button:has(span[data-icon*="send"]) { ${SEND} }
-button:has(span[data-icon*="send"]) span[data-icon] { color: #fff !important; }
+button:has(span[data-icon*="send"]) span[data-icon] { color: var(--pup-out-text, #fff) !important; }
 ${FONT_EVERYWHERE}`,
 
   telegram: `
 * {
   --color-background-own: ${C.blue} !important;
   --color-background-own-selected: ${C.bluePressed} !important;
-  --color-text-own: #ffffff !important;
+  --color-text-own: ${C.blueText} !important;
   --color-text-secondary-own: rgba(255, 255, 255, 0.75) !important;
   --color-message-meta-own: rgba(255, 255, 255, 0.75) !important;
-  --color-own-links: #ffffff !important;
-  --color-accent-own: #ffffff !important;
+  --color-own-links: ${C.blueText} !important;
+  --color-accent-own: ${C.blueText} !important;
   --border-radius-messages: ${C.radius} !important;
   /* Blue send button and accents, pill composer, blue selected chat. */
   --color-primary: ${C.blue} !important;
@@ -137,8 +140,8 @@ ${FONT_EVERYWHERE}`,
 * {
   --chat-outgoing-message-bubble-background-color: ${C.blue} !important;
   --chat-incoming-message-bubble-background-color: ${C.gray} !important;
-  --ig-outgoing-message-bubble: 10, 132, 255 !important;
-  --ig-incoming-message-bubble: 58, 58, 60 !important;
+  --ig-outgoing-message-bubble: var(--pup-out-rgb, 10, 132, 255) !important;
+  --ig-incoming-message-bubble: var(--pup-in-rgb, 58, 58, 60) !important;
   --chat-bubble-border-radius: ${C.radius} !important;
   /* Space syntax with alpha: rgb(var(--ig-primary-background)) becomes transparent. */
   --ig-primary-background: 0 0 0 / 0 !important;
@@ -192,6 +195,18 @@ export function skinCss(serviceId: string, fontFace = ''): string | null {
   const css = SKINS[serviceId]
   if (!css) return null
   return fontFace ? `${fontFace}\n${css}` : css
+}
+
+/** Bubble colors from Settings, as variables the skins read (one tiny stylesheet). */
+export function colorsCss(out: string, inc: string, outText: string, inText: string, outRgb: string, inRgb: string): string {
+  const ok = (c: string): boolean => /^#[0-9a-f]{6}$/i.test(c)
+  const okRgb = (c: string): boolean => /^\d{1,3}, \d{1,3}, \d{1,3}$/.test(c)
+  if (![out, inc, outText, inText].every(ok) || ![outRgb, inRgb].every(okRgb)) return ''
+  return (
+    `html { --pup-out: ${out} !important; --pup-in: ${inc} !important; ` +
+    `--pup-out-text: ${outText} !important; --pup-in-text: ${inText} !important; ` +
+    `--pup-out-rgb: ${outRgb} !important; --pup-in-rgb: ${inRgb} !important; }`
+  )
 }
 
 /** Chat glass: how solid the page tint is (0 = clear, 1 = solid black). */

@@ -38,3 +38,9 @@ it('chat glass strength is clamped and formatted', async () => {
   expect(glassCss(7)).toContain('--pup-a: 1.00')
   expect(glassCss(-1)).toContain('--pup-a: 0.00')
 })
+
+it('color stylesheet only accepts real colors', async () => {
+  const { colorsCss } = await import('../src/main/skins')
+  expect(colorsCss('#ff375f', '#3a3a3c', '#ffffff', '#ffffff', '255, 55, 95', '58, 58, 60')).toContain('--pup-out: #ff375f')
+  expect(colorsCss('red;}*{display:none', '#3a3a3c', '#fff', '#fff', '1, 2, 3', '1, 2, 3')).toBe('')
+})

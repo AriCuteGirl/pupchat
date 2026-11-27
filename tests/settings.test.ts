@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadSettings, saveSettings } from '../src/main/settings'
-import { defaults, validate } from '../src/shared/settings'
+import { colorsFor, defaults, rgbTriple, textOn, validate } from '../src/shared/settings'
 
 const IDS = ['whatsapp', 'instagram', 'discord']
 
@@ -26,7 +26,7 @@ describe('validate', () => {
   })
   it('reads per-platform prefs and never disables every platform', () => {
     const s = validate({ services: { whatsapp: { enabled: false, muted: true }, instagram: { enabled: false }, discord: { enabled: false } } }, IDS)
-    expect(s.services['whatsapp']).toEqual({ enabled: true, notifications: true, muted: true, media: false, skin: false })
+    expect(s.services['whatsapp']).toEqual({ enabled: true, notifications: true, muted: true, media: false, skin: false, colors: null })
     expect(s.services['discord']!.enabled).toBe(false)
   })
   it('only accepts known sleep choices, sides and hotkeys', () => {
@@ -58,5 +58,25 @@ describe('load/save', () => {
   })
   it('defaults when the file is missing', () => {
     expect(loadSettings(join(dir, 'missing.json'), IDS)).toEqual(defaults(IDS))
+  })
+})
+
+describe('bubble colors', () => {
+  it('validates hex colors and per-platform overrides', () => {
+    const s = validate({ colors: { out: '#FF375F', in: 'red' }, services: { discord: { colors: { out: '#30d158' } } } }, IDS)
+    expect(s.colors).toEqual({ out: '#ff375f', in: '#3a3a3c' })
+    expect(s.services['discord']!.colors).toEqual({ out: '#30d158', in: '#3a3a3c' })
+    expect(s.services['whatsapp']!.colors).toBeNull()
+    expect(colorsFor(s, 'discord').out).toBe('#30d158')
+    expect(colorsFor(s, 'whatsapp').out).toBe('#ff375f')
+  })
+  it('picks readable text and converts to rgb triples', () => {
+    expect(textOn('#0a84ff')).toBe('#ffffff')
+    expect(textOn('#3a3a3c')).toBe('#ffffff')
+    expect(textOn('#30d158')).toBe('#ffffff')
+    expect(textOn('#ff9f0a')).toBe('#ffffff')
+    expect(textOn('#ffd60a')).toBe('#000000')
+    expect(textOn('#ffffff')).toBe('#000000')
+    expect(rgbTriple('#0a84ff')).toBe('10, 132, 255')
   })
 })

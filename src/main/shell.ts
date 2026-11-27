@@ -2,10 +2,10 @@ import { ipcMain, type BrowserWindow, type WebContentsView } from 'electron'
 import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
-import { LIMITS, validate, type Settings } from '../shared/settings'
+import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
-import { EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
+import { colorsCss, EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
 import { readFileSync } from 'node:fs'
 import { resourcePath } from './tray'
 import { createServiceView } from './serviceView'
@@ -17,6 +17,9 @@ interface Slot {
   /** insertCSS key of the chat glass strength, and the value it was made for. */
   glassKey: string | null
   glassFor: number
+  /** insertCSS key of the bubble colors, and the CSS it was made from. */
+  colorsKey: string | null
+  colorsFor: string
   def: ServiceDef
   view: WebContentsView | null
   status: ServiceStatus
@@ -70,7 +73,9 @@ export class Shell {
         retryTimer: null,
         skinKey: null,
         glassKey: null,
-        glassFor: -1
+        glassFor: -1,
+        colorsKey: null,
+        colorsFor: ''
       })
     this.active = this.listed()[0]!.def.id
     win.on('resize', () => this.layout())
@@ -271,6 +276,18 @@ export class Shell {
       slot.glassKey = await wc.insertCSS(glassCss(alpha), { cssOrigin: 'author' })
       slot.glassFor = alpha
     }
+    // Bubble colors (global or this platform's own): another tiny stylesheet.
+    const c = colorsFor(this.settings, slot.def.id)
+    const colors = colorsCss(c.out, c.in, textOn(c.out), textOn(c.in), rgbTriple(c.out), rgbTriple(c.in))
+    if (slot.colorsKey && (!want || slot.colorsFor !== colors)) {
+      const key = slot.colorsKey
+      slot.colorsKey = null
+      await wc.removeInsertedCSS(key).catch(() => {})
+    }
+    if (want && colors && !slot.colorsKey) {
+      slot.colorsKey = await wc.insertCSS(colors, { cssOrigin: 'author' })
+      slot.colorsFor = colors
+    }
   }
 
   private syncVisibility(): void {
@@ -320,6 +337,7 @@ export class Shell {
     wc.on('dom-ready', () => {
       slot.skinKey = null
       slot.glassKey = null
+      slot.colorsKey = null
       void this.applySkin(slot)
     })
     wc.on('did-finish-load', () => {
@@ -359,6 +377,7 @@ export class Shell {
     slot.view = null
     slot.skinKey = null
     slot.glassKey = null
+    slot.colorsKey = null
     slot.unread = 0
     slot.needsLogin = false
     slot.status = status

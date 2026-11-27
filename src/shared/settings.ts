@@ -1,5 +1,13 @@
 /** Everything PupChat remembers. Validation is pure so main, UI and tests share it. */
 
+/** Bubble colors, as #rrggbb. */
+export interface BubbleColors {
+  out: string
+  in: string
+}
+
+export const DEFAULT_COLORS: BubbleColors = { out: '#0a84ff', in: '#3a3a3c' }
+
 export interface ServicePrefs {
   /** Shown in the list and loaded. */
   enabled: boolean
@@ -11,6 +19,8 @@ export interface ServicePrefs {
   media: boolean
   /** Optional iMessage look (CSS only). Off by default. */
   skin: boolean
+  /** This platform's own bubble colors; null = use the global ones. */
+  colors: BubbleColors | null
 }
 
 export interface Settings {
@@ -30,6 +40,8 @@ export interface Settings {
   glassOpacity: number
   /** With the iMessage look: how solid the chats' black tint is, 0.1 (clear) to 1 (solid). */
   chatGlass: number
+  /** With the iMessage look: bubble colors for all platforms (each can override). */
+  colors: BubbleColors
   /** Hide the panel when you click into another window. */
   hideOnBlur: boolean
   /** Minutes before an unused platform sleeps to save RAM; 0 = never. */
@@ -60,7 +72,8 @@ export const DEFAULT_SERVICE_PREFS: ServicePrefs = {
   notifications: true,
   muted: false,
   media: false,
-  skin: false
+  skin: false,
+  colors: null
 }
 
 export function defaults(ids: readonly string[]): Settings {
@@ -74,6 +87,7 @@ export function defaults(ids: readonly string[]): Settings {
     side: 'right',
     glassOpacity: 0.38,
     chatGlass: 0.55,
+    colors: { ...DEFAULT_COLORS },
     hideOnBlur: false,
     sleepAfterMinutes: 0,
     gameMode: false,
@@ -86,6 +100,12 @@ const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.m
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : d)
+const HEX = /^#[0-9a-f]{6}$/i
+const hex = (v: unknown, d: string): string => (typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : d)
+function colorsOf(v: unknown, d: BubbleColors): BubbleColors {
+  const o = isObj(v) ? v : {}
+  return { out: hex(o['out'], d.out), in: hex(o['in'], d.in) }
+}
 /** Electron accelerator: modifiers and one key, e.g. "Ctrl+Shift+Space". */
 const HOTKEY = /^((Ctrl|Control|Alt|Shift|Super|Meta|CommandOrControl|CmdOrCtrl)\+){1,3}[A-Za-z0-9]{1,9}$/
 
@@ -116,7 +136,8 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
       notifications: bool(r['notifications'], true),
       muted: bool(r['muted'], false),
       media: bool(r['media'], false),
-      skin: bool(r['skin'], false)
+      skin: bool(r['skin'], false),
+      colors: isObj(r['colors']) ? colorsOf(r['colors'], DEFAULT_COLORS) : null
     }
   }
   // At least one platform stays enabled, or the panel would be empty.
@@ -137,6 +158,7 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
     chatGlass: isNum(o['chatGlass'])
       ? Math.round(clamp(o['chatGlass'], LIMITS.minChatGlass, LIMITS.maxChatGlass) * 100) / 100
       : d.chatGlass,
+    colors: colorsOf(o['colors'], DEFAULT_COLORS),
     hideOnBlur: bool(o['hideOnBlur'], d.hideOnBlur),
     sleepAfterMinutes: (SLEEP_CHOICES as readonly number[]).includes(sleep) ? sleep : d.sleepAfterMinutes,
     gameMode: bool(o['gameMode'], d.gameMode),
@@ -144,4 +166,29 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
     windowsHotkey:
       typeof o['windowsHotkey'] === 'string' && HOTKEY.test(o['windowsHotkey']) ? o['windowsHotkey'] : d.windowsHotkey
   }
+}
+
+/**
+ * Text color for a bubble color. Like iMessage: white on saturated colors (blue, green,
+ * orange, pink), black only on really light ones (yellow, white), by relative luminance.
+ */
+export function textOn(bg: string): '#000000' | '#ffffff' {
+  const n = parseInt(bg.slice(1), 16)
+  const lin = (c: number): number => {
+    const x = c / 255
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+  }
+  const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255)
+  return L > 0.5 ? '#000000' : '#ffffff'
+}
+
+/** "#0a84ff" -> "10, 132, 255" */
+export function rgbTriple(hexColor: string): string {
+  const n = parseInt(hexColor.slice(1), 16)
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
+}
+
+/** Colors in effect for a platform. */
+export function colorsFor(s: Settings, id: string): BubbleColors {
+  return s.services[id]?.colors ?? s.colors
 }

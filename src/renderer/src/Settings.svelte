@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, Bell, Bone, MessageCircle, Mic, PawPrint, Power, VolumeX, X } from '@lucide/svelte'
+  import { ArrowDown, ArrowUp, Bell, Bone, MessageCircle, Mic, Palette, PawPrint, Power, VolumeX, X } from '@lucide/svelte'
   import type { ShellApi, ShellState } from '../../shared/ipc'
   import { SERVICES } from '../../shared/services'
-  import { LIMITS, SLEEP_CHOICES, type ServicePrefs, type Settings } from '../../shared/settings'
+  import { LIMITS, SLEEP_CHOICES, textOn, type BubbleColors, type ServicePrefs, type Settings } from '../../shared/settings'
+  import ColorPicker from './lib/ColorPicker.svelte'
   import GlassSlider from './lib/GlassSlider.svelte'
   import { serviceIcon } from './lib/icons'
   import PillToggle from './lib/PillToggle.svelte'
@@ -40,6 +41,28 @@
   const glassPct = $derived(
     Math.round(((s.glassOpacity - LIMITS.minGlass) / (LIMITS.maxGlass - LIMITS.minGlass)) * 100)
   )
+
+  const OUT_PRESETS = [
+    { color: '#0a84ff', name: 'iMessage blue' },
+    { color: '#30d158', name: 'Green' },
+    { color: '#ff375f', name: 'Pink' },
+    { color: '#bf5af2', name: 'Purple' },
+    { color: '#5e5ce6', name: 'Indigo' },
+    { color: '#ff9f0a', name: 'Orange' },
+    { color: '#40c8e0', name: 'Teal' }
+  ]
+  const IN_PRESETS = [
+    { color: '#3a3a3c', name: 'Gray' },
+    { color: '#2c2c2e', name: 'Graphite' },
+    { color: '#48484a', name: 'Slate' },
+    { color: '#1c2a44', name: 'Night blue' },
+    { color: '#3a2440', name: 'Plum' },
+    { color: '#1f3a2c', name: 'Forest' }
+  ]
+  function setPlatformColors(id: string, patch: Partial<BubbleColors>): void {
+    const current = s.services[id]?.colors ?? s.colors
+    setPref(id, { colors: { ...current, ...patch } })
+  }
 
   let hotkeyDraft = $state('')
   let hotkeyError = $state('')
@@ -168,6 +191,25 @@
     </div>
   </div>
 
+  <h3>Message colors</h3>
+  <div class="group">
+    <div class="row preview-row">
+      <div class="preview" aria-hidden="true">
+        <span class="bubble them" style:background={s.colors.in} style:color={textOn(s.colors.in)}>Hey! Are you on? 🐾</span>
+        <span class="bubble you" style:background={s.colors.out} style:color={textOn(s.colors.out)}>Yes, one more round</span>
+      </div>
+    </div>
+    <div class="row stacked">
+      <div class="label"><span class="title">Your messages</span></div>
+      <ColorPicker label="Your messages" value={s.colors.out} presets={OUT_PRESETS} onchange={(c) => update({ colors: { ...s.colors, out: c } })} />
+    </div>
+    <div class="row stacked">
+      <div class="label"><span class="title">Their messages</span></div>
+      <ColorPicker label="Their messages" value={s.colors.in} presets={IN_PRESETS} onchange={(c) => update({ colors: { ...s.colors, in: c } })} />
+    </div>
+  </div>
+  <p class="note">For platforms with the iMessage look. Give a platform its own colors with "Own colors" below.</p>
+
   <h3>Platforms</h3>
   <div class="group">
     {#each s.order as id, i (id)}
@@ -207,7 +249,24 @@
             <PillToggle label={id === 'discord' ? 'iMessage colors' : 'iMessage look'} on={p.skin} onchange={(v) => setPref(id, { skin: v })}>
               {#snippet icon()}<MessageCircle size={13} />{/snippet}
             </PillToggle>
+            {#if p.skin}
+              <PillToggle label="Own colors" on={p.colors !== null} onchange={(v) => setPref(id, { colors: v ? { ...s.colors } : null })}>
+                {#snippet icon()}<Palette size={13} />{/snippet}
+              </PillToggle>
+            {/if}
           </div>
+          {#if p.skin && p.colors}
+            <div class="own-colors">
+              <div class="own-line">
+                <span class="own-label">You</span>
+                <ColorPicker compact label="{d?.name}: your messages" value={p.colors.out} presets={OUT_PRESETS} onchange={(c) => setPlatformColors(id, { out: c })} />
+              </div>
+              <div class="own-line">
+                <span class="own-label">Them</span>
+                <ColorPicker compact label="{d?.name}: their messages" value={p.colors.in} presets={IN_PRESETS} onchange={(c) => setPlatformColors(id, { in: c })} />
+              </div>
+            </div>
+          {/if}
         {/if}
       </div>
     {/each}
@@ -461,6 +520,49 @@
     flex-wrap: wrap;
     gap: var(--sp-2);
     padding-left: 40px;
+  }
+  .preview-row {
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .preview {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
+  }
+  .bubble {
+    max-width: 70%;
+    padding: 7px 12px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.3;
+    transition: background var(--dur-base), color var(--dur-base);
+  }
+  .bubble.them {
+    align-self: flex-start;
+    border-bottom-left-radius: 5px;
+  }
+  .bubble.you {
+    align-self: flex-end;
+    border-bottom-right-radius: 5px;
+  }
+  .own-colors {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 40px;
+  }
+  .own-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .own-label {
+    width: 40px;
+    font-size: var(--fs-caption);
+    color: var(--c-text-2);
   }
   .note {
     font-size: var(--fs-caption);
