@@ -46,11 +46,14 @@ async function start(): Promise<void> {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 
   // Keys handled before the page sees them, in the shell and in every service view.
+  // Esc hides the panel only from PupChat's own UI: inside a site it belongs to the site
+  // (closing GIF/sticker pickers, menus, image viewers).
   const keys = (wc: WebContents): void => {
     wc.on('before-input-event', (e, input) => {
       if (input.type !== 'keyDown') return
       const plain = !input.control && !input.alt && !input.meta && !input.shift
-      if (input.key === 'Escape' && plain) {
+      const ownUi = wc === win.webContents || wc.getURL().startsWith('file:') || wc.getURL().includes('/paw.html')
+      if (input.key === 'Escape' && plain && ownUi) {
         e.preventDefault()
         void panel?.hide()
       } else if (input.control && input.shift && !input.alt && input.key.toLowerCase() === 'b') {
