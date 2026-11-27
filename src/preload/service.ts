@@ -34,6 +34,26 @@ function install(send: (n: unknown) => void): (id: number) => void {
       return ''
     }
   }
+  /**
+   * Pictures only this page can open (blob: addresses, which WhatsApp and Telegram use for
+   * profile pictures) are turned into a small embedded image here, so the banner can show
+   * them. Normal https pictures are passed as they are.
+   */
+  const portableIcon = async (u: string): Promise<string> => {
+    if (!u.startsWith('blob:')) return u
+    try {
+      const blob = await (await fetch(u)).blob()
+      if (!blob.type.startsWith('image/') || blob.size > 250_000) return ''
+      return await new Promise<string>((resolve) => {
+        const r = new FileReader()
+        r.onload = () => resolve(typeof r.result === 'string' ? r.result : '')
+        r.onerror = () => resolve('')
+        r.readAsDataURL(blob)
+      })
+    } catch {
+      return ''
+    }
+  }
   const fire = (t: EventTarget, type: string): Event => {
     const ev = new Event(type, { cancelable: true })
     t.dispatchEvent(ev)
@@ -66,7 +86,8 @@ function install(send: (n: unknown) => void): (id: number) => void {
       this.pupId = next++
       live.set(this.pupId, this)
       if (live.size > 50) live.delete(live.keys().next().value as number)
-      send({ id: this.pupId, title: this.title, body: this.body, icon: this.icon, silent: this.silent })
+      const msg = { id: this.pupId, title: this.title, body: this.body, silent: this.silent }
+      void portableIcon(this.icon).then((icon) => send({ ...msg, icon }))
       setTimeout(() => fire(this, 'show'), 0)
     }
     close(): void {
@@ -90,8 +111,8 @@ function install(send: (n: unknown) => void): (id: number) => void {
     .ServiceWorkerRegistration
   if (SWR)
     SWR.prototype['showNotification'] = function (title: string, options: Record<string, unknown> = {}) {
-      send({ id: -1, title: String(title ?? ''), body: String(options['body'] ?? ''), icon: abs(options['icon']) })
-      return Promise.resolve()
+      const msg = { id: -1, title: String(title ?? ''), body: String(options['body'] ?? '') }
+      return portableIcon(abs(options['icon'])).then((icon) => send({ ...msg, icon }))
     }
 
   // Called when you click the banner: the site's own click handler opens that chat.
