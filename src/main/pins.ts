@@ -61,6 +61,80 @@ export const FIND_TOP_CHAT_AVATAR = `(() => {
   return imgs[0] ? (imgs[0].currentSrc || imgs[0].src) : ''
 })()`
 
+/**
+ * The open chat's header: its heading (the person's or group's name) and the avatar next to it.
+ * Read once, when you pin or refresh a pin. Pictures only this page can open (blob:) are
+ * turned into an embedded image here.
+ */
+const READ_CHAT_HEADER = `(async () => {
+  const w = innerWidth
+  const heads = [...document.querySelectorAll('h1, h2, h3, [role="heading"]')].filter((h) => {
+    const r = h.getBoundingClientRect()
+    return r.top >= 0 && r.top < 90 && r.left > w * 0.12 && r.width > 0 && (h.innerText || '').trim()
+  })
+  heads.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  const h = heads[0]
+  if (!h) return null
+  const name = h.innerText.split('\\n')[0].trim().slice(0, 64)
+  let img = null
+  for (let e = h, k = 0; k < 6 && e && !img; k++, e = e.parentElement)
+    img = [...e.querySelectorAll('img')].find((i) => {
+      const r = i.getBoundingClientRect()
+      return r.width >= 18 && r.width <= 72 && Math.abs(r.width - r.height) < 4
+    }) || null
+  let avatar = img ? img.currentSrc || img.src : ''
+  if (avatar.startsWith('blob:')) {
+    try {
+      const b = await (await fetch(avatar)).blob()
+      avatar = b.size < 200000 ? await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => res(''); fr.readAsDataURL(b) }) : ''
+    } catch { avatar = '' }
+  }
+  return { name, avatar }
+})()`
+
+/** Shrink a picture (https via the platform's session, or data:) to a 64 px data URL. */
+async function pictureToDataUrl(wc: WebContents, src: string): Promise<string> {
+  let buf: Buffer
+  let type = ''
+  if (src.startsWith('data:image/')) {
+    const m = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(src)
+    if (!m) return ''
+    type = m[1]!
+    buf = Buffer.from(m[2]!, 'base64')
+  } else if (/^https:\/\//.test(src) && src.length < 2000) {
+    const url = new URL(src)
+    if (url.searchParams.has('size')) url.searchParams.set('size', '64')
+    const res = await wc.session.fetch(url.toString())
+    if (!res.ok) return ''
+    buf = Buffer.from(await res.arrayBuffer())
+    type = (res.headers.get('content-type') ?? '').split(';')[0]!.trim()
+  } else return ''
+  if (buf.length > 3_000_000) return ''
+  const img = nativeImage.createFromBuffer(buf)
+  if (!img.isEmpty()) return img.resize({ width: 64, height: 64, quality: 'good' }).toDataURL()
+  if (/^image\/(webp|png|jpeg)$/.test(type) && buf.length < 55_000) return `data:${type};base64,${buf.toString('base64')}`
+  return ''
+}
+
+/** Name and avatar of the open chat, from its header (falls back to the old avatar finder). */
+export async function grabChatHeader(wc: WebContents): Promise<{ name: string; avatar: string }> {
+  try {
+    // Sites draw the chat header a moment after switching chats: wait for it (≈ 5 s max).
+    let r: { name?: unknown; avatar?: unknown } | null = null
+    for (let i = 0; i < 10; i++) {
+      r = (await wc.executeJavaScript(READ_CHAT_HEADER)) as { name?: unknown; avatar?: unknown } | null
+      if (r && typeof r.name === 'string' && r.name && typeof r.avatar === 'string' && r.avatar) break
+      await new Promise((res) => setTimeout(res, 500))
+    }
+    const name = typeof r?.name === 'string' ? r.name : ''
+    const src = typeof r?.avatar === 'string' ? r.avatar : ''
+    const avatar = src ? await pictureToDataUrl(wc, src) : ''
+    return { name, avatar: avatar || (await grabAvatar(wc)) }
+  } catch {
+    return { name: '', avatar: await grabAvatar(wc) }
+  }
+}
+
 /** Grab and shrink an avatar to a 64 px PNG data URL (with the platform's own cookies). */
 export async function grabAvatar(wc: WebContents, finder: string = FIND_HEADER_AVATAR): Promise<string> {
   try {

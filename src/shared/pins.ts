@@ -94,6 +94,11 @@ export function validatePins(raw: unknown, isChatUrl: (service: string, url: str
   return { categories, items }
 }
 
+/** Words sites put in titles/headers that aren't anyone's name (English and Czech). */
+export function isGenericName(x: string): boolean {
+  return /^(chats?|inbox|direct|messages?|messenger|friends|přátelé|zprávy|zpráva|konverzace|doručená pošta)$/i.test(x.trim())
+}
+
 /** Chat name from the page title: "(2) Discord | @mia" -> "mia". '' if there's nothing useful. */
 export function nameFromTitle(title: string, platform: string): string {
   const parts = title
@@ -101,7 +106,7 @@ export function nameFromTitle(title: string, platform: string): string {
     .replace(/^[•●∙]\s*/, '')
     .split(/\s+[|•·–-]\s+/)
     .map((x) => x.trim().replace(/^@/, ''))
-    .filter((x) => x && x.toLowerCase() !== platform.toLowerCase() && !/^(chats?|inbox|direct|messenger|friends|přátelé)$/i.test(x))
+    .filter((x) => x && x.toLowerCase() !== platform.toLowerCase() && !isGenericName(x))
   return (parts[0] ?? '').slice(0, 64)
 }
 

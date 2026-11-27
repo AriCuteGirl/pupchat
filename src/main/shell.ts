@@ -3,7 +3,8 @@ import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { isChatUrl, SERVICES, type ServiceDef } from '../shared/services'
 import { CATEGORY_COLORS, type Pins } from '../shared/pins'
-import { addCategory, addPin, goToChat, grabAvatar, loadPins, moveWithin, nameFromTitle, savePins } from './pins'
+import { addCategory, addPin, goToChat, grabChatHeader, loadPins, moveWithin, nameFromTitle, savePins } from './pins'
+import { isGenericName } from '../shared/pins'
 import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
 import { unreadFor, unreadGrowth, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
@@ -324,8 +325,9 @@ export class Shell {
     const url = slot.url
     const title = slot.title
     const pinTo = async (category: string, renameCategoryAfter = false): Promise<void> => {
-      const avatar = await grabAvatar(wc)
-      addPin(this.pins, { service, url, name: nameFromTitle(title, slot.def.name) || slot.def.name, avatar, category })
+      const head = await grabChatHeader(wc)
+      const name = (head.name && !isGenericName(head.name) ? head.name : '') || nameFromTitle(title, slot.def.name) || slot.def.name
+      addPin(this.pins, { service, url, name, avatar: head.avatar, category })
       this.savePinsAndEmit()
       if (renameCategoryAfter && category) this.startRename('category', category)
     }
@@ -369,12 +371,19 @@ export class Shell {
     const pin = this.pins.items.find((p) => p.id === id)
     const wc = pin ? this.slots.get(pin.service)?.view?.webContents : undefined
     if (!pin || !wc) return
-    await new Promise((r) => setTimeout(r, 1200)) // let the chat header render
-    const avatar = await grabAvatar(wc)
-    if (avatar) {
-      pin.avatar = avatar
-      this.savePinsAndEmit()
+    const head = await grabChatHeader(wc) // waits for the chat header to render
+    let changed = false
+    if (head.avatar) {
+      pin.avatar = head.avatar
+      changed = true
     }
+    // Replace only names that were never really a name (e.g. "Zprávy"); keep your renames.
+    const platformName = SERVICES.find((x) => x.id === pin.service)?.name ?? ''
+    if (head.name && !isGenericName(head.name) && (isGenericName(pin.name) || pin.name === platformName)) {
+      pin.name = head.name.slice(0, 64)
+      changed = true
+    }
+    if (changed) this.savePinsAndEmit()
   }
 
   renamePin(id: string, name: string): void {
@@ -424,7 +433,7 @@ export class Shell {
     Menu.buildFromTemplate([
       { label: 'Open', click: () => void this.openPin(id) },
       { label: 'Rename…', click: () => this.startRename('pin', id) },
-      { label: 'Refresh avatar', click: () => void this.refreshPinAvatar(id) },
+      { label: 'Refresh avatar and name', click: () => void this.refreshPinAvatar(id) },
       {
         label: 'Move to',
         submenu: [
