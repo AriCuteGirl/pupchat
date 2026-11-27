@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowDown, ArrowUp, Bell, Bone, MessageCircle, Mic, Palette, PawPrint, Power, VolumeX, X } from '@lucide/svelte'
+  import { ArrowDown, ArrowUp, Bell, Bone, Download, MessageCircle, Mic, Palette, PawPrint, Power, VolumeX, Wand, X } from '@lucide/svelte'
   import type { ShellApi, ShellState } from '../../shared/ipc'
   import { SERVICES } from '../../shared/services'
   import { LIMITS, SLEEP_CHOICES, textOn, type BubbleColors, type ServicePrefs, type Settings } from '../../shared/settings'
@@ -63,6 +63,17 @@
     const current = s.services[id]?.colors ?? s.colors
     setPref(id, { colors: { ...current, ...patch } })
   }
+
+  let importing = $state(false)
+  let importError = $state('')
+  async function importTheme(): Promise<void> {
+    importing = true
+    importError = ''
+    const r = await api.importDiscordTheme()
+    importing = false
+    if (!r.ok) importError = r.error
+  }
+  const themeDate = (iso: string): string => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 
   let hotkeyDraft = $state('')
   let hotkeyError = $state('')
@@ -255,6 +266,21 @@
               </PillToggle>
             {/if}
           </div>
+          {#if id === 'discord'}
+            <div class="theme-line">
+              {#if shell.discordTheme}
+                <PillToggle label="Equicord theme" on={p.theme} onchange={(v) => setPref(id, { theme: v })}>
+                  {#snippet icon()}<Wand size={13} />{/snippet}
+                </PillToggle>
+                <span class="theme-src" title={shell.discordTheme.source}>{shell.discordTheme.source.replace(/^Equicord: /, '')} · {themeDate(shell.discordTheme.importedAt)}</span>
+              {/if}
+              <button class="text-btn" disabled={importing} onclick={importTheme}>
+                <Download size={13} />
+                {importing ? 'Importing…' : shell.discordTheme ? 'Update' : 'Import from Equicord'}
+              </button>
+            </div>
+            {#if importError}<p class="theme-err">{importError}</p>{/if}
+          {/if}
           {#if p.skin && p.colors}
             <div class="own-colors">
               <div class="own-line">
@@ -549,6 +575,35 @@
   .bubble.you {
     align-self: flex-end;
     border-bottom-right-radius: 5px;
+  }
+  .theme-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 40px;
+    flex-wrap: wrap;
+  }
+  .theme-line .text-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .theme-line .text-btn:disabled {
+    color: var(--c-text-3);
+  }
+  .theme-src {
+    font-size: var(--fs-caption);
+    color: var(--c-text-2);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .theme-err {
+    margin: 0;
+    padding-left: 40px;
+    font-size: var(--fs-caption);
+    color: var(--c-danger);
   }
   .own-colors {
     display: flex;

@@ -5,6 +5,7 @@ import { SERVICES, type ServiceDef } from '../shared/services'
 import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
 import { parseUnread, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
+import { importFromEquicord, loadThemeCss, themeInfo } from './discordTheme'
 import { colorsCss, EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
 import { readFileSync } from 'node:fs'
 import { resourcePath } from './tray'
@@ -20,6 +21,9 @@ interface Slot {
   /** insertCSS key of the bubble colors, and the CSS it was made from. */
   colorsKey: string | null
   colorsFor: string
+  /** insertCSS key of an imported theme (Discord), and the theme text version applied. */
+  themeKey: string | null
+  themeFor: number
   def: ServiceDef
   view: WebContentsView | null
   status: ServiceStatus
@@ -54,6 +58,9 @@ export class Shell {
   private active: string
   private settingsOpen = false
   private hotkeyProblem = false
+  /** Bumped on every theme import, so pages re-apply the new CSS. */
+  private themeVersion = 0
+  private themeText: string | null = loadThemeCss()
   private listeners: Array<(s: ShellState) => void> = []
   private settingsListeners: Array<(s: Settings, prev: Settings) => void> = []
   isPanelVisible: () => boolean = () => true
@@ -76,7 +83,9 @@ export class Shell {
         glassKey: null,
         glassFor: -1,
         colorsKey: null,
-        colorsFor: ''
+        colorsFor: '',
+        themeKey: null,
+        themeFor: -1
       })
     this.active = this.listed()[0]!.def.id
     win.on('resize', () => this.layout())
@@ -150,7 +159,8 @@ export class Shell {
       settings: structuredClone(this.settings),
       settingsOpen: this.settingsOpen,
       platform: process.platform,
-      hotkeyProblem: this.hotkeyProblem
+      hotkeyProblem: this.hotkeyProblem,
+      discordTheme: themeInfo()
     }
   }
 
@@ -261,11 +271,40 @@ export class Shell {
       s.view?.webContents.setAudioMuted(Boolean(this.settings.services[s.def.id]?.muted) || quiet)
   }
 
-  /** Add or remove the iMessage look on a platform's current page (CSS only). */
+  /** Import the Equicord themes for Discord and apply them. */
+  async importDiscordTheme(): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await importFromEquicord()
+      this.themeText = loadThemeCss()
+      this.themeVersion++
+      const services = structuredClone(this.settings.services)
+      services['discord'] = { ...services['discord']!, theme: true }
+      this.updateSettings({ services })
+      const slot = this.slots.get('discord')
+      if (slot) void this.applySkin(slot)
+      this.emit()
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
+  /** Add or remove the iMessage look (or an imported theme) on a platform's page (CSS only). */
   private async applySkin(slot: Slot): Promise<void> {
     const wc = slot.view?.webContents
     if (!wc || wc.isDestroyed()) return
-    const want = Boolean(this.settings.services[slot.def.id]?.skin)
+    // An imported theme (Discord) replaces the iMessage look.
+    const useTheme = Boolean(this.settings.services[slot.def.id]?.theme) && slot.def.id === 'discord' && !!this.themeText
+    if (slot.themeKey && (!useTheme || slot.themeFor !== this.themeVersion)) {
+      const key = slot.themeKey
+      slot.themeKey = null
+      await wc.removeInsertedCSS(key).catch(() => {})
+    }
+    if (useTheme && !slot.themeKey) {
+      slot.themeKey = await wc.insertCSS(this.themeText!, { cssOrigin: 'author' })
+      slot.themeFor = this.themeVersion
+    }
+    const want = Boolean(this.settings.services[slot.def.id]?.skin) && !useTheme
     const css = skinCss(slot.def.id, EMBEDDED_FONT_OK.has(slot.def.id) ? fontFace() : '')
     if (want && css && !slot.skinKey) {
       slot.skinKey = await wc.insertCSS(css, { cssOrigin: 'author' })
@@ -347,6 +386,7 @@ export class Shell {
       slot.skinKey = null
       slot.glassKey = null
       slot.colorsKey = null
+      slot.themeKey = null
       void this.applySkin(slot)
     })
     wc.on('did-finish-load', () => {
@@ -387,6 +427,7 @@ export class Shell {
     slot.skinKey = null
     slot.glassKey = null
     slot.colorsKey = null
+    slot.themeKey = null
     slot.unread = 0
     slot.needsLogin = false
     slot.status = status
@@ -450,6 +491,9 @@ export class Shell {
       if (fromShell(e) && typeof patch === 'object' && patch !== null && !Array.isArray(patch))
         this.updateSettings(patch as Partial<Settings>)
     })
+    ipcMain.handle(CH.importDiscordTheme, (e) =>
+      fromShell(e) ? this.importDiscordTheme() : { ok: false, error: 'not allowed' }
+    )
     ipcMain.on(CH.setSettingsOpen, (e, open: unknown) => {
       if (fromShell(e) && typeof open === 'boolean') this.setSettingsOpen(open)
     })

@@ -43,6 +43,8 @@ it again and you're back in the game, with focus right where it was.
 - **Made for gaming** — hide on blur, sleep unused platforms to save RAM, per-platform mute,
   zoom per platform (`Ctrl` `+`/`-`/`0`), `Ctrl+1…5` to switch, `Ctrl+Shift+B` to collapse the list.
 - **Your choice of side** — dock left or right, drag the edge to resize, everything remembered.
+- **Your Discord theme** — import the themes you use in Equicord/Vencord (theme links, local themes,
+  Quick CSS) with one click. Themes only: plugins run code inside Discord and aren't supported.
 
 <p align="center">
   <img src="docs/screenshots/banner.png" width="372" alt="An iMessage-style notification banner">

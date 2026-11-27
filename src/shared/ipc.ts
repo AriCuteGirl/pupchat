@@ -28,7 +28,11 @@ export interface ShellState {
   platform: string
   /** The Windows/X11 global shortcut is taken by another app. */
   hotkeyProblem: boolean
+  /** The imported Discord theme, if any. */
+  discordTheme: { source: string; importedAt: string; bytes: number } | null
 }
+
+export type ImportResult = { ok: true } | { ok: false; error: string }
 
 /** The only channels the shell may use. */
 export const CH = {
@@ -43,6 +47,7 @@ export const CH = {
   reload: 'pupchat:reload',
   updateSettings: 'pupchat:update-settings',
   setSettingsOpen: 'pupchat:set-settings-open',
+  importDiscordTheme: 'pupchat:import-discord-theme',
   pawUnread: 'pupchat:paw-unread'
 } as const
 
@@ -60,4 +65,6 @@ export interface ShellApi {
   /** Partial settings; main validates and applies them. */
   updateSettings(patch: Partial<Settings>): void
   setSettingsOpen(open: boolean): void
+  /** Import the themes enabled in Equicord for PupChat's Discord. */
+  importDiscordTheme(): Promise<ImportResult>
 }

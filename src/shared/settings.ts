@@ -21,6 +21,8 @@ export interface ServicePrefs {
   skin: boolean
   /** This platform's own bubble colors; null = use the global ones. */
   colors: BubbleColors | null
+  /** Discord: use the imported Equicord theme instead of the iMessage look. */
+  theme: boolean
 }
 
 export interface Settings {
@@ -73,7 +75,8 @@ export const DEFAULT_SERVICE_PREFS: ServicePrefs = {
   muted: false,
   media: false,
   skin: false,
-  colors: null
+  colors: null,
+  theme: false
 }
 
 export function defaults(ids: readonly string[]): Settings {
@@ -137,7 +140,8 @@ export function validate(raw: unknown, ids: readonly string[]): Settings {
       muted: bool(r['muted'], false),
       media: bool(r['media'], false),
       skin: bool(r['skin'], false),
-      colors: isObj(r['colors']) ? colorsOf(r['colors'], DEFAULT_COLORS) : null
+      colors: isObj(r['colors']) ? colorsOf(r['colors'], DEFAULT_COLORS) : null,
+      theme: bool(r['theme'], false)
     }
   }
   // At least one platform stays enabled, or the panel would be empty.

@@ -26,7 +26,7 @@ describe('validate', () => {
   })
   it('reads per-platform prefs and never disables every platform', () => {
     const s = validate({ services: { whatsapp: { enabled: false, muted: true }, instagram: { enabled: false }, discord: { enabled: false } } }, IDS)
-    expect(s.services['whatsapp']).toEqual({ enabled: true, notifications: true, muted: true, media: false, skin: false, colors: null })
+    expect(s.services['whatsapp']).toEqual({ enabled: true, notifications: true, muted: true, media: false, skin: false, colors: null, theme: false })
     expect(s.services['discord']!.enabled).toBe(false)
   })
   it('only accepts known sleep choices, sides and hotkeys', () => {

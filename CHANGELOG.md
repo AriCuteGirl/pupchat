@@ -16,4 +16,5 @@ First version.
   mic/camera, zoom per platform, launch at login, Windows shortcut
 - Tray icon with show/hide, game mode, mute, settings and quit
 - Windows: global shortcut, acrylic on Windows 11, always on top
+- Discord: import your Equicord/Vencord themes (CSS only; imports inlined, small images embedded)
 - CLI: `--toggle`, `--show`, `--hide`, `--settings`, `--quit`, `--service=<id>`

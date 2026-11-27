@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
-import { CH, type ShellApi, type ShellState } from '../shared/ipc'
+import { CH, type ImportResult, type ShellApi, type ShellState } from '../shared/ipc'
 
 const api: ShellApi = {
   getState: () => ipcRenderer.invoke(CH.getState) as Promise<ShellState>,
@@ -16,6 +16,7 @@ const api: ShellApi = {
   home: (id) => ipcRenderer.send(CH.home, id),
   reload: (id) => ipcRenderer.send(CH.reload, id),
   updateSettings: (patch) => ipcRenderer.send(CH.updateSettings, patch),
-  setSettingsOpen: (open) => ipcRenderer.send(CH.setSettingsOpen, open)
+  setSettingsOpen: (open) => ipcRenderer.send(CH.setSettingsOpen, open),
+  importDiscordTheme: () => ipcRenderer.invoke(CH.importDiscordTheme) as Promise<ImportResult>
 }
 contextBridge.exposeInMainWorld('pupchat', api)
