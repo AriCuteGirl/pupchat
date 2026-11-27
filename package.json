@@ -13,7 +13,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.web.json",
     "test": "vitest run",
-    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:linux": "electron-vite build && mkdir -p \"$HOME/.cache/pupchat-build-tmp\" && TMPDIR=\"$HOME/.cache/pupchat-build-tmp\" electron-builder --linux",
     "dist:win": "electron-vite build && electron-builder --win"
   },
   "devDependencies": {

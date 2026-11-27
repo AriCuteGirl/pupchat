@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { inFlatpak } from './host'
 
 /** Desktop-entry quoting: wrap in double quotes, escape \\ " ` $ (XDG spec). */
 function quote(arg: string): string {
@@ -13,13 +14,15 @@ function quote(arg: string): string {
  * temporary mount it runs from); installed: the binary; dev: electron + app dir.
  */
 export function launchCommand(): string {
+  if (inFlatpak) return `flatpak run ${process.env['FLATPAK_ID'] || 'world.puppygirl.PupChat'} --hide`
   const appImage = process.env['APPIMAGE']
   const args = appImage ? [appImage] : app.isPackaged ? [process.execPath] : [process.execPath, app.getAppPath()]
   return [...args.map(quote), '--hide'].join(' ')
 }
 
 function autostartFile(): string {
-  const base = process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config')
+  // Inside Flatpak XDG_CONFIG_HOME points into the sandbox; autostart lives in the real one.
+  const base = inFlatpak ? join(homedir(), '.config') : process.env['XDG_CONFIG_HOME'] || join(homedir(), '.config')
   return join(base, 'autostart', 'pupchat.desktop')
 }
 

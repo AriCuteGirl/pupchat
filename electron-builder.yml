@@ -21,6 +21,7 @@ asarUnpack:
 linux:
   target:
     - AppImage
+    - flatpak
     - dir
   icon: resources/icon/icon.png
   category: Network
@@ -39,6 +40,42 @@ linux:
 
 appImage:
   artifactName: PupChat-${version}-${arch}.AppImage
+
+flatpak:
+  runtime: org.freedesktop.Platform
+  runtimeVersion: '25.08'
+  sdk: org.freedesktop.Sdk
+  base: org.electronjs.Electron2.BaseApp
+  baseVersion: '25.08'
+  artifactName: PupChat-${version}-${arch}.flatpak
+  finishArgs:
+    # Display, GPU, network, sound
+    - --socket=wayland
+    - --socket=fallback-x11
+    - --share=ipc
+    - --device=dri
+    - --share=network
+    - --socket=pulseaudio
+    # Notifications and tray icon
+    - --talk-name=org.freedesktop.Notifications
+    - --talk-name=org.kde.StatusNotifierWatcher
+    # Hyprland: event socket (read-only) and running hyprctl/quickshell on the host
+    - --filesystem=xdg-run/hypr:ro
+    - --talk-name=org.freedesktop.Flatpak
+    # The overlay paw's files and state (shared with the host's Quickshell)
+    - --filesystem=xdg-run/pupchat:create
+    # Launch at login writes ~/.config/autostart/pupchat.desktop
+    - --filesystem=xdg-config/autostart:create
+    # Import Discord themes from Equicord / Vencord / Vesktop (read-only)
+    - --filesystem=xdg-config/Equicord:ro
+    - --filesystem=xdg-config/equicord:ro
+    - --filesystem=xdg-config/Vencord:ro
+    - --filesystem=xdg-config/vesktop:ro
+    # Banner sound files you pick (read-only)
+    - --filesystem=xdg-download:ro
+    - --filesystem=xdg-music:ro
+    # Microphone/camera are still opt-in per platform inside PupChat
+    - --device=all
 
 win:
   target:

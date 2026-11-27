@@ -91,13 +91,14 @@ hl.bind("SUPER + code:51", hl.dsp.workspace.toggle_special("pupchat"),
     { description = "PupChat: Toggle chat panel" })
 
 -- The panel lives on its own special workspace; PupChat docks itself to the screen edge
-hl.window_rule({ match = { class = "^(pupchat)$", title = "^(PupChat)$" }, workspace = "special:pupchat silent", float = true, border_size = 0, rounding = 26 })
+hl.window_rule({ match = { class = "^(pupchat|world\\.puppygirl\\.PupChat)$", title = "^(PupChat)$" }, workspace = "special:pupchat silent", float = true, border_size = 0, rounding = 26 })
 -- The paw: on every workspace, clickable, never grabs focus when it appears
-hl.window_rule({ match = { class = "^(pupchat)$", title = "^(PupChat Paw)$" }, float = true, pin = true, size = { 56, 56 }, no_initial_focus = true, border_size = 0, no_shadow = true, rounding = 28 })
+hl.window_rule({ match = { class = "^(pupchat|world\\.puppygirl\\.PupChat)$", title = "^(PupChat Paw)$" }, float = true, pin = true, size = { 56, 56 }, no_initial_focus = true, border_size = 0, no_shadow = true, rounding = 28 })
 -- Notification banners
-hl.window_rule({ match = { class = "^(pupchat)$", title = "^(PupChat Banner)$" }, float = true, pin = true, no_initial_focus = true, border_size = 0, rounding = 22 })
+hl.window_rule({ match = { class = "^(pupchat|world\\.puppygirl\\.PupChat)$", title = "^(PupChat Banner)$" }, float = true, pin = true, no_initial_focus = true, border_size = 0, rounding = 22 })
 ```
 
+The class is `pupchat`, or `world.puppygirl.PupChat` for the Flatpak; the rules match both.
 Without these rules PupChat still works as a normal window (`pupchat --toggle`).
 
 **Good to know**

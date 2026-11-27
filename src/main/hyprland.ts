@@ -1,16 +1,26 @@
 import { execFile } from 'node:child_process'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
+import { hostCommand } from './host'
 
 export const SPECIAL = 'pupchat'
+
+/**
+ * PupChat's window classes: `pupchat` normally, the app id inside Flatpak. Inside the sandbox
+ * PupChat also sees different process ids than Hyprland, so its windows are found by class.
+ */
+export const OUR_CLASSES = ['pupchat', 'world.puppygirl.PupChat']
+const isOurs = (c: { pid: number; class?: string }, pid: number): boolean =>
+  c.pid === pid || OUR_CLASSES.includes(c.class ?? '')
 
 export function isHyprland(): boolean {
   return Boolean(process.env['HYPRLAND_INSTANCE_SIGNATURE'])
 }
 
 function hyprctl(args: string[]): Promise<string> {
+  const [cmd, argv] = hostCommand('hyprctl', args)
   return new Promise((resolve, reject) => {
-    execFile('hyprctl', args, { timeout: 3000 }, (err, stdout) =>
+    execFile(cmd, argv, { timeout: 3000 }, (err, stdout) =>
       err ? reject(err) : resolve(stdout)
     )
   })
@@ -192,10 +202,11 @@ export async function isSpecialOpen(): Promise<boolean> {
 export async function workspaceOf(pid: number, title: string): Promise<string | null> {
   const clients = JSON.parse(await hyprctl(['-j', 'clients'])) as Array<{
     pid: number
+    class: string
     title: string
     workspace: { name: string }
   }>
-  return clients.find((c) => c.pid === pid && c.title === title)?.workspace.name ?? null
+  return clients.find((c) => isOurs(c, pid) && c.title === title)?.workspace.name ?? null
 }
 
 /**
@@ -256,9 +267,10 @@ export class HyprEvents {
     const clients = JSON.parse(await hyprctl(['-j', 'clients'])) as Array<{
       address: string
       pid: number
+      class: string
       monitor: number
     }>
-    for (const c of clients) if (c.pid === this.pid) this.ours.add(c.address)
+    for (const c of clients) if (isOurs(c, this.pid)) this.ours.add(c.address)
     if (this.ours.has(addr)) return
     this.lastOther = addr
     this.onOtherFocus()

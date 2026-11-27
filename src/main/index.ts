@@ -175,7 +175,7 @@ async function start(): Promise<void> {
   // On Hyprland with Quickshell the paw is an overlay layer, visible even over fullscreen
   // games; otherwise (or if Quickshell stops) PupChat's own paw window.
   let overlay: OverlayPaw | null = overlayPawAvailable()
-    ? new OverlayPaw(unpacked(resourcePath('quickshell', 'paw')), () => {
+    ? new OverlayPaw(unpacked(resourcePath('quickshell', 'paw')), unpacked(resourcePath('tray', 'paw.svg')), () => {
         overlay = null
         paw.showInactive()
         placeTheWholeEdge()
@@ -190,7 +190,7 @@ async function start(): Promise<void> {
     side: shell.current.side,
     panelWidth: windowWidth(shell.panelWidth, shell.isCollapsed),
     top: 0.45,
-    icon: unpacked(resourcePath('tray', 'paw.svg'))
+    icon: overlay?.iconPath ?? ''
   })
   const placeTheWholeEdge = (): void => {
     const w = windowWidth(shell.panelWidth, shell.isCollapsed)
