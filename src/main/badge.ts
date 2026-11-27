@@ -16,6 +16,12 @@ export function parseUnread(title: string): Unread {
   return 0
 }
 
+/** Unread for a platform, honoring "ignore the bare dot" (Discord server activity). */
+export function unreadFor(title: string, ignoreDot = false): Unread {
+  const u = parseUnread(title)
+  return ignoreDot && u === 'dot' ? 0 : u
+}
+
 /** Sum for the paw: dots count as one so you still see something is waiting. */
 export function totalUnread(values: readonly Unread[]): number {
   return values.reduce<number>((sum, u) => sum + (u === 'dot' ? 1 : u), 0)

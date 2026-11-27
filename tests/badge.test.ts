@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { badgeLabel, parseUnread, totalUnread } from '../src/main/badge'
+import { badgeLabel, parseUnread, totalUnread, unreadFor } from '../src/main/badge'
 
 describe('parseUnread', () => {
   it('reads a leading count', () => {
@@ -32,5 +32,13 @@ describe('totalUnread / badgeLabel', () => {
     expect(badgeLabel(5)).toBe('5')
     expect(badgeLabel(150)).toBe('99+')
     expect(badgeLabel('dot')).toBe('')
+  })
+})
+
+describe('unreadFor', () => {
+  it('ignores the bare dot when asked (Discord server activity), keeps numbers', () => {
+    expect(unreadFor('• Discord | #general', true)).toBe(0)
+    expect(unreadFor('(2) Discord | Friends', true)).toBe(2)
+    expect(unreadFor('• Messenger', false)).toBe('dot')
   })
 })

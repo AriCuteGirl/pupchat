@@ -3,7 +3,7 @@ import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
 import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
-import { parseUnread, type Unread } from './badge'
+import { unreadFor, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
 import { importFromEquicord, loadThemeCss, themeInfo } from './discordTheme'
 import { colorsCss, EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
@@ -406,7 +406,7 @@ export class Shell {
     })
     // Badges come from the title only; the title is not kept.
     wc.on('page-title-updated', (_e, title) => {
-      const u = parseUnread(title)
+      const u = unreadFor(title, slot.def.ignoreDot)
       if (u !== slot.unread) {
         slot.unread = u
         this.emit()

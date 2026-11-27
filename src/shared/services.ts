@@ -9,6 +9,11 @@ export interface ServiceDef {
   icon: string
   /** URL path prefixes that mean "you're on the login page" (no page content is read). */
   loginPaths?: string[]
+  /**
+   * The title's "•" without a number means something low-priority here (Discord: any server
+   * has unread messages). Ignore it; count only numbered unread (DMs, mentions).
+   */
+  ignoreDot?: boolean
 }
 
 /** Default order. Which ones are enabled, and their order, becomes a setting in step 5. */
@@ -34,7 +39,8 @@ export const SERVICES: readonly ServiceDef[] = [
     url: 'https://discord.com/app',
     hosts: ['discord.com', '.discord.com', 'discordapp.com', '.discordapp.com'],
     icon: 'siDiscord',
-    loginPaths: ['/login', '/register']
+    loginPaths: ['/login', '/register'],
+    ignoreDot: true
   },
   {
     id: 'messenger',
