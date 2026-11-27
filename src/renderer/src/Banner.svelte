@@ -54,6 +54,7 @@
   {#key key}
     <div
       class="banner"
+      style:--brand="#{logo?.hex ?? 'ffffff'}"
       role="button"
       tabindex="0"
       aria-label="{b.name}: {b.title}. Open chat"
@@ -75,7 +76,7 @@
         {/if}
         {#if logo && b.icon && !iconFailed}
           <span class="badge" style:background="#{logo.hex}">
-            <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path d={logo.path} fill="#fff" /></svg>
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d={logo.path} fill="#fff" /></svg>
           </span>
         {/if}
       </div>
@@ -111,10 +112,13 @@
     gap: 12px;
     padding: 0 14px;
     border-radius: 22px;
-    background: rgba(40, 40, 46, 0.55);
+    /* The platform's color tints the glass edge and a soft glow, so you can tell at a glance. */
+    background:
+      radial-gradient(120% 140% at 0% 50%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 60%),
+      rgba(40, 40, 46, 0.55);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.4),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+      inset 0 0 0 1.5px color-mix(in srgb, var(--brand) 70%, transparent);
     cursor: pointer;
     animation: drop 320ms var(--ease-out);
     outline: none;
@@ -159,10 +163,10 @@
   }
   .badge {
     position: absolute;
-    right: -3px;
-    bottom: -3px;
-    width: 18px;
-    height: 18px;
+    right: -4px;
+    bottom: -4px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -171,6 +175,10 @@
   .text {
     flex: 1;
     min-width: 0;
+  }
+  .app {
+    color: color-mix(in srgb, var(--brand) 55%, white);
+    font-weight: var(--fw-medium);
   }
   .top {
     display: flex;
