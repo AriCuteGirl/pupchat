@@ -49,10 +49,15 @@
       <div class="avatar">
         {#if b.icon && !iconFailed}
           <img src={b.icon} alt="" onerror={() => (iconFailed = true)} />
+        {:else if logo}
+          <!-- No sender picture (e.g. a count-only banner): the platform's logo. -->
+          <span class="initial" style:background="#{logo.hex}">
+            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d={logo.path} fill="#fff" /></svg>
+          </span>
         {:else}
           <span class="initial">{(b.title || b.name).slice(0, 1).toUpperCase()}</span>
         {/if}
-        {#if logo}
+        {#if logo && b.icon && !iconFailed}
           <span class="badge" style:background="#{logo.hex}">
             <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true"><path d={logo.path} fill="#fff" /></svg>
           </span>

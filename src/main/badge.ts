@@ -32,3 +32,9 @@ export function badgeLabel(u: Unread): string {
   if (u === 'dot') return ''
   return u > 99 ? '99+' : String(u)
 }
+
+/** How many new unread a change means: 0 when it didn't grow (a dot counts as 1). */
+export function unreadGrowth(before: Unread, after: Unread): number {
+  const n = (u: Unread): number => (u === 'dot' ? 1 : u)
+  return Math.max(0, n(after) - n(before))
+}

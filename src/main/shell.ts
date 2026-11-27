@@ -3,7 +3,7 @@ import { CH, type ServiceStatus, type ShellState } from '../shared/ipc'
 import { LAYOUT, viewBounds } from '../shared/layout'
 import { SERVICES, type ServiceDef } from '../shared/services'
 import { colorsFor, LIMITS, rgbTriple, textOn, validate, type Settings } from '../shared/settings'
-import { unreadFor, type Unread } from './badge'
+import { unreadFor, unreadGrowth, type Unread } from './badge'
 import { closePageGracefully } from './closePage'
 import { importFromEquicord, loadThemeCss, themeInfo } from './discordTheme'
 import { colorsCss, EMBEDDED_FONT_OK, glassCss, interFontFace, skinCss } from './skins'
@@ -63,6 +63,7 @@ export class Shell {
   private themeText: string | null = loadThemeCss()
   private listeners: Array<(s: ShellState) => void> = []
   private settingsListeners: Array<(s: Settings, prev: Settings) => void> = []
+  private growthListeners: Array<(id: string, name: string, added: number, total: Unread) => void> = []
   isPanelVisible: () => boolean = () => true
 
   constructor(
@@ -136,6 +137,11 @@ export class Shell {
 
   onState(fn: (s: ShellState) => void): void {
     this.listeners.push(fn)
+  }
+
+  /** A platform's unread count went up (from its page title). */
+  onUnreadGrowth(fn: (id: string, name: string, added: number, total: Unread) => void): void {
+    this.growthListeners.push(fn)
   }
 
   /** Called after settings change, with the previous values. */
@@ -408,8 +414,10 @@ export class Shell {
     wc.on('page-title-updated', (_e, title) => {
       const u = unreadFor(title, slot.def.ignoreDot)
       if (u !== slot.unread) {
+        const added = unreadGrowth(slot.unread, u)
         slot.unread = u
         this.emit()
+        if (added > 0) for (const fn of this.growthListeners) fn(slot.def.id, slot.def.name, added, u)
       }
     })
   }

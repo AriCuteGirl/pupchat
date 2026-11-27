@@ -218,9 +218,18 @@ async function start(): Promise<void> {
     },
     refocusPrevious: () => void p.refocusPrevious()
   })
+  // When the site sent its own notification (sender + preview), remember it: the fallback
+  // banner below then stays quiet for that platform.
+  const lastRealNotification = new Map<string, number>()
+  const bannerAllowed = (id: string): boolean => {
+    const set = shell.current
+    if (!set.services[id]?.notifications || set.gameMode) return false
+    return !(p.isVisible && shell.activeId() === id && !shell.isSettingsOpen)
+  }
   ipcMain.on('pupchat:notify', (e, raw: unknown) => {
     const svc = shell.serviceOf(e.sender)
     if (!svc || typeof raw !== 'object' || raw === null) return
+    lastRealNotification.set(svc.id, Date.now())
     const r = raw as Record<string, unknown>
     const str = (v: unknown, n: number): string => (typeof v === 'string' ? v.slice(0, n) : '')
     const set = shell.current
@@ -237,6 +246,26 @@ async function start(): Promise<void> {
       pageId: e.sender.id
     })
   })
+  // Fallback: the badge went up but the site sent no notification of its own (Instagram
+  // relies on browser push, which apps don't get). Show a banner without content.
+  const FALLBACK_WAIT_MS = 3000
+  shell.onUnreadGrowth((id, name, added) => {
+    const at = Date.now()
+    setTimeout(() => {
+      if ((lastRealNotification.get(id) ?? 0) >= at - 500) return
+      if (!bannerAllowed(id)) return
+      banners.push({
+        service: id,
+        name,
+        title: added === 1 ? 'New message' : `${added} new messages`,
+        body: '',
+        icon: '',
+        notifId: -1,
+        pageId: -1
+      })
+    }, FALLBACK_WAIT_MS)
+  })
+
   // Opening PupChat on a platform clears its waiting banners.
   p.onChange((v) => v && banners.clear(shell.activeId()))
 

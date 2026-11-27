@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { badgeLabel, parseUnread, totalUnread, unreadFor } from '../src/main/badge'
+import { badgeLabel, parseUnread, totalUnread, unreadFor, unreadGrowth } from '../src/main/badge'
 
 describe('parseUnread', () => {
   it('reads a leading count', () => {
@@ -40,5 +40,16 @@ describe('unreadFor', () => {
     expect(unreadFor('• Discord | #general', true)).toBe(0)
     expect(unreadFor('(2) Discord | Friends', true)).toBe(2)
     expect(unreadFor('• Messenger', false)).toBe('dot')
+  })
+})
+
+describe('unreadGrowth', () => {
+  it('counts only increases', () => {
+    expect(unreadGrowth(0, 1)).toBe(1)
+    expect(unreadGrowth(2, 5)).toBe(3)
+    expect(unreadGrowth(5, 2)).toBe(0)
+    expect(unreadGrowth(0, 'dot')).toBe(1)
+    expect(unreadGrowth('dot', 'dot')).toBe(0)
+    expect(unreadGrowth(3, 0)).toBe(0)
   })
 })
